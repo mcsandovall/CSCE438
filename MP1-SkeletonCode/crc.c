@@ -72,7 +72,20 @@ int connect_to(const char *host, const int port)
     // below is just dummy code for compilation, remove it.
 	// int sockfd = -1;
 	// return sockfd;
-	int test = 0; // this is to test commits with aws
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (!sockfd){
+		perror("Error creating socket");
+		return sockfd;
+	}
+	struct sockaddr_in server;
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = htonl(host);
+	server.sin_port = htons(port);
+	if (!connect(sockfd, (struct sockaddr*) &server, sizeof(server))){
+		perror("Error connecting to server");
+		return -1;
+	}
+	return sockfd;
 }
 
 /* 
