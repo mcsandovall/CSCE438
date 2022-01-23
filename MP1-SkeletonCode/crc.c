@@ -70,8 +70,9 @@ int connect_to(const char *host, const int port)
 	// ------------------------------------------------------------
 
     // below is just dummy code for compilation, remove it.
-	int sockfd = -1;
-	return sockfd;
+	// int sockfd = -1;
+	// return sockfd;
+	int test = 0; // this is to test commits with aws
 }
 
 /* 
