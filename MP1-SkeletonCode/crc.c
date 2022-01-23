@@ -118,13 +118,28 @@ struct Reply process_command(const int sockfd, char* command)
 	// - CREATE/DELETE/JOIN and "<name>" are separated by one space.
 	// ------------------------------------------------------------
 
-
+	// create a reply for the client to send the server
+	struct Reply reply;
+	reply.status = FAILURE_UNKNOWN; // set the status to unkown
+	
+	/* The server will get the command as is and parse it*/
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// After you create the message, you need to send it to the
 	// server and receive a result from the server.
 	// ------------------------------------------------------------
 
+	//send the command to the server as it is so that the server can parse this command
+	if(!write(sockfd, command, MAX_DATA)){
+		perror("Error: Command not able to be sent");
+		return reply;
+	}
+
+	// recieve reply from the server
+	if(read(sockfd, &reply, sizeof(struct Reply))){
+		perror("Error: Invalid response from Server");
+		return reply;
+	}
 
 	// ------------------------------------------------------------
 	// GUIDE 3:
@@ -167,12 +182,7 @@ struct Reply process_command(const int sockfd, char* command)
     // "list" is a string that contains a list of chat rooms such 
     // as "r1,r2,r3,"
 	// ------------------------------------------------------------
-
-	// REMOVE below code and write your own Reply.
-	struct Reply reply;
-	reply.status = SUCCESS;
-	reply.num_member = 5;
-	reply.port = 1024;
+	
 	return reply;
 }
 
