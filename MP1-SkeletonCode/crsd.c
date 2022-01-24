@@ -43,9 +43,32 @@ nection to the server. It is up to the server to handle this and manage
 the chat room membership accordingly.
 */
 
+/**
+ * ChatRoom structure is design to be used for 
+ * easy storage and access information about a chat room
+*/
+
+typedef struct ChatRoom {
+    char chat_name[MAX_DATA];
+    int port_number;
+    struct ChatRoom * next;
+};
+
+
+int port_number = 5500;
+ChatRoom head , * tail;
+
+/**
+ * Create a linked list in order create the channels
+*/
 //create the functions for the server to handle 
 
+// Functions need to have threads handling the work 
+int process_request(const struct Command command);
+int create_chatRoom(const char * chat_name);
+int delete_chatRoom(const char * chat_name);
+ChatRoom get_charRoom(const char * chat_name);
 
 int main(int argc, char** argv){
-    
+    return 0;
 }
