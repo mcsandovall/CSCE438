@@ -29,6 +29,25 @@ enum Status
     FAILURE_UNKNOWN
 };
 
+/**
+ * Construct a Command struct to handle and parse the commands to the server
+*/
+
+enum COMMAND_TYPE_PREFIX 
+{
+    CREATE,
+    DELETE,
+    JOIN,
+    LIST,
+    UNKNOWN
+};
+
+struct Command 
+{
+    enum COMMAND_TYPE_PREFIX type;
+    char chat_name[MAX_DATA];
+};
+
 /* 
  * Reply structure is designed to be used for displaying the
  * result of the command that has been sent to the server.
