@@ -122,7 +122,35 @@ struct Reply process_command(const int sockfd, char* command)
 	struct Reply reply;
 	reply.status = FAILURE_UNKNOWN; // set the status to unkown
 	
-	/* The server will get the command as is and parse it*/
+	//Parse the command to create a new command
+	struct Command cmd;
+	cmd.type = UNKNOWN;
+	
+	// check for the type of command
+	if(strncmp(command, "CREATE", 6) == 0){
+		cmd.type = CREATE;
+	}else if(strncmp(command, "DELETE", 6) == 0){
+		cmd.type = DELETE;
+	}else if (strncmp(command, "JOIN", 4) == 0){
+		cmd.type = JOIN;
+	}else if (strcpy(command, "LIST", 4) == 0){
+		cmd.type = LIST;
+	}else{
+		// invalid command
+		return reply;
+	}
+	
+	// set the chat name to the command (if not a list)
+	if(cmd.type != LIST){
+		int i;
+		for(i =0; command[i] ; ++i){
+			if(command[i] == ' '){ // check for the space to split the command and the name
+				char buff[strlen(command)-i];
+				memcpy(buff,command[i], strlen(command));
+				cmd.chat_name = buff;
+			}
+		}
+	}
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// After you create the message, you need to send it to the
@@ -130,7 +158,7 @@ struct Reply process_command(const int sockfd, char* command)
 	// ------------------------------------------------------------
 
 	//send the command to the server as it is so that the server can parse this command
-	if(write(sockfd, command, MAX_DATA) < 0){
+	if(write(sockfd, cmd, sizeof(cmd)) < 0){
 		perror("Error: Command not able to be sent");
 		return reply;
 	}
