@@ -148,6 +148,7 @@ struct Reply process_command(const int sockfd, char* command)
 				char buff[strlen(command)-i];
 				memcpy(buff, &command[i], strlen(command));
 				strcpy(cmd.chat_name, buff);
+				break;
 			}
 		}
 	}
@@ -238,10 +239,10 @@ void process_chatmode(const char* host, const int port)
 	// the server.
 	// ------------------------------------------------------------
 	char user_msg[MAX_DATA];
-	get_message(&user_msg, MAX_DATA); // get message from the user
+	get_message(user_msg, MAX_DATA); // get message from the user
 	
 	// send the message to the server
-	if(write(sockfd, &user_msg, MAX_DATA) < 0){
+	if(write(sockfd, user_msg, MAX_DATA) < 0){
 		perror("Error: Message can not be sent");
 		return;
 	}
