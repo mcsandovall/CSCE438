@@ -45,7 +45,7 @@ enum COMMAND_TYPE_PREFIX
 struct Command 
 {
     enum COMMAND_TYPE_PREFIX type;
-    char chat_name[MAX_DATA];
+    char * chat_name;
 };
 
 /* 

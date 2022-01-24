@@ -133,7 +133,7 @@ struct Reply process_command(const int sockfd, char* command)
 		cmd.type = DELETE;
 	}else if (strncmp(command, "JOIN", 4) == 0){
 		cmd.type = JOIN;
-	}else if (strcpy(command, "LIST", 4) == 0){
+	}else if (strncmp(command, "LIST", 4) == 0){
 		cmd.type = LIST;
 	}else{
 		// invalid command
@@ -146,8 +146,8 @@ struct Reply process_command(const int sockfd, char* command)
 		for(i =0; command[i] ; ++i){
 			if(command[i] == ' '){ // check for the space to split the command and the name
 				char buff[strlen(command)-i];
-				memcpy(buff,command[i], strlen(command));
-				cmd.chat_name = buff;
+				memcpy(buff, &command[i], strlen(command));
+				strcpy(cmd.chat_name, buff);
 			}
 		}
 	}
@@ -158,7 +158,7 @@ struct Reply process_command(const int sockfd, char* command)
 	// ------------------------------------------------------------
 
 	//send the command to the server as it is so that the server can parse this command
-	if(write(sockfd, cmd, sizeof(cmd)) < 0){
+	if(write(sockfd, &cmd, sizeof(cmd)) < 0){
 		perror("Error: Command not able to be sent");
 		return reply;
 	}
