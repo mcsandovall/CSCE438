@@ -81,7 +81,7 @@ int connect_to(const char *host, const int port)
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = htonl(host);
 	server.sin_port = htons(port);
-	if (!connect(sockfd, (struct sockaddr*) &server, sizeof(server))){
+	if (connect(sockfd, (struct sockaddr*) &server, sizeof(server)) < 0){
 		perror("Error connecting to server");
 		return -1;
 	}
@@ -130,13 +130,13 @@ struct Reply process_command(const int sockfd, char* command)
 	// ------------------------------------------------------------
 
 	//send the command to the server as it is so that the server can parse this command
-	if(!write(sockfd, command, MAX_DATA)){
+	if(write(sockfd, command, MAX_DATA) < 0){
 		perror("Error: Command not able to be sent");
 		return reply;
 	}
 
 	// recieve reply from the server
-	if(read(sockfd, &reply, sizeof(struct Reply))){
+	if(read(sockfd, &reply, sizeof(struct Reply)) < 0){
 		perror("Error: Invalid response from Server");
 		return reply;
 	}
@@ -200,7 +200,8 @@ void process_chatmode(const char* host, const int port)
 	// to the server using host and port.
 	// You may re-use the function "connect_to".
 	// ------------------------------------------------------------
-
+	int sockfd =  connect_to(host, port);
+	if(sockfd < 0){return;} // error handling
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// Once the client have been connected to the server, we need
@@ -208,6 +209,12 @@ void process_chatmode(const char* host, const int port)
 	// At the same time, the client should wait for a message from
 	// the server.
 	// ------------------------------------------------------------
+	char user_msg[MAX_DATA];
+	get_message(&user_msg, MAX_DATA); // get message from the user
+	
+	// send the message to the server
+	
+	
 	
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
