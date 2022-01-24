@@ -48,7 +48,7 @@ the chat room membership accordingly.
  * easy storage and access information about a chat room
 */
 
-typedef struct ChatRoom {
+struct ChatRoom {
     char chat_name[MAX_DATA];
     int port_number;
     struct ChatRoom * next;
@@ -56,7 +56,7 @@ typedef struct ChatRoom {
 
 
 int port_number = 5500;
-ChatRoom head , * tail;
+struct ChatRoom head , * tail;
 
 /**
  * Create a linked list in order create the channels
@@ -67,7 +67,7 @@ ChatRoom head , * tail;
 int process_request(const struct Command command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
-ChatRoom get_charRoom(const char * chat_name);
+struct ChatRoom get_charRoom(const char * chat_name);
 
 int main(int argc, char** argv){
     return 0;
