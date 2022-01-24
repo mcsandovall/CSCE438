@@ -213,6 +213,11 @@ void process_chatmode(const char* host, const int port)
 	get_message(&user_msg, MAX_DATA); // get message from the user
 	
 	// send the message to the server
+	if(write(sockfd, &user_msg, MAX_DATA) < 0){
+		perror("Error: Message can not be sent");
+		return;
+	}
+	
 	
 	
 	
