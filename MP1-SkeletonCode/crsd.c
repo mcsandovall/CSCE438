@@ -33,12 +33,12 @@ shutting down connection...) to all connected clients before ter-
 minating their connections, closing the master socket, and deleting the
 entry. Inform the client about the result.
 -----
-•Incoming chat messages are handled on slave sockets that are derived
+Incoming chat messages are handled on slave sockets that are derived
 from the chat-room specific master socket. Whenever a chat message
 comes in, forward that message to all clients that are part of the chat
 room.
 -----
-•Clients leave the chat room by (unceremoniously) terminating the con-
+Clients leave the chat room by (unceremoniously) terminating the con-
 nection to the server. It is up to the server to handle this and manage
 the chat room membership accordingly.
 */
@@ -48,26 +48,23 @@ the chat room membership accordingly.
  * easy storage and access information about a chat room
 */
 
-struct ChatRoom {
-    char chat_name[MAX_DATA];
+typedef struct ChatRoom {
     int port_number;
-    struct ChatRoom * next;
-};
-
-
-int port_number = 5500;
-struct ChatRoom head , * tail;
+    char name[MAX_DATA];
+} chat_room;
 
 /**
  * Create a linked list in order create the channels
 */
+chat_room head, * tail; // make a dumy head to start of the channels in the linked list
+
 //create the functions for the server to handle 
 
 // Functions need to have threads handling the work 
 int process_request(const struct Command command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
-struct ChatRoom get_charRoom(const char * chat_name);
+chat_room get_charRoom(const char * chat_name);
 
 int main(int argc, char** argv){
     return 0;
