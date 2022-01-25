@@ -65,7 +65,7 @@ chat_room *head = NULL, * tail = NULL;
 int process_request(const struct Command command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
-chat_room get_chatRoom(const char * chat_name);
+chat_room * get_chatRoom(const char * chat_name);
 
 int main(int argc, char** argv){
     return 0;
@@ -79,13 +79,7 @@ int main(int argc, char** argv){
  * @return int              -1 if have an unsucessful request
 */
 int process_request(const struct Command command){
-    switch(command.COMMAND_TYPE_PREFIX){
-        case CREATE:
-        case DELETE:
-        case JOIN:
-        case LIST:
-        
-    }
+    return 0;
 }
 
 /**
@@ -99,9 +93,21 @@ int create_chatRoom(const char * chat_name){
     // first check and see if the chat room doesnt already exist
     if(get_chatRoom(chat_name) != NULL){return -1;}
     
+    chat_room * room = (chat_room *) malloc(sizeof(chat_room));
+    strcpy(room->name,chat_name);
+    
     if(head == NULL){ // make the first node
-        
+        room->port_number = port_number;
+        room->next = NULL;
+        head = room;
+        tail = room;
+        return 0;
     }
+    
+    room->port_number = ++port_number;
+    tail->next = room;
+    tail = room;
+    retrun 0;
 }
 
 /**
