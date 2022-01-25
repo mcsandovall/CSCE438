@@ -58,7 +58,7 @@ chat_room *head = NULL, * tail = NULL;
 //create the functions for the server to handle 
 
 // Functions need to have threads handling the work 
-int process_request(const struct Command command, struct Reply * reply);
+int process_request(const Command command, struct Reply * reply);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
 void get_roomList(struct Reply * reply);
@@ -75,7 +75,7 @@ int main(int argc, char** argv){
  * @parameter Command       parsed command with the appropriate flag and the chat room name
  * @return int              success or error code
 */
-int process_request(const struct Command command, struct Reply * reply){
+int process_request(const Command command, struct Reply * reply){
     
     switch(command.type){
         case CREATE:

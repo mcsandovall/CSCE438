@@ -42,11 +42,11 @@ enum COMMAND_TYPE_PREFIX
     UNKNOWN
 };
 
-struct Command 
+typedef struct
 {
     enum COMMAND_TYPE_PREFIX type;
-    char * chat_name;
-};
+    char chat_name[MAX_DATA];
+} Command;
 
 /**
  * Chat room datastructure 

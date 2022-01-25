@@ -123,7 +123,7 @@ struct Reply process_command(const int sockfd, char* command)
 	reply.status = FAILURE_UNKNOWN; // set the status to unkown
 	
 	//Parse the command to create a new command
-	struct Command cmd;
+	Command cmd;
 	cmd.type = UNKNOWN;
 	
 	// check for the type of command
