@@ -48,12 +48,6 @@ the chat room membership accordingly.
  * easy storage and access information about a chat room
 */
 
-typedef struct ChatRoom {
-    int port_number;
-    char name[MAX_DATA];
-    struct ChatRoom * next;
-} chat_room;
-
 int port_number = 5500;
 
 /**

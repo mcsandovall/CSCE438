@@ -48,6 +48,17 @@ struct Command
     char * chat_name;
 };
 
+/**
+ * Chat room datastructure 
+*/
+typedef struct {
+    char room_name[MAX_DATA];
+    int port_number;
+    int num_members;
+    int slave_socket[MAX_DATA];
+} chat_room;
+
+
 /* 
  * Reply structure is designed to be used for displaying the
  * result of the command that has been sent to the server.
