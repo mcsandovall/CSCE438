@@ -51,12 +51,13 @@ the chat room membership accordingly.
 typedef struct ChatRoom {
     int port_number;
     char name[MAX_DATA];
+    struct ChatRoom * next;
 } chat_room;
 
 /**
  * Create a linked list in order create the channels
 */
-chat_room head, * tail; // make a dumy head to start of the channels in the linked list
+chat_room *head = NULL, * tail = NULL;
 
 //create the functions for the server to handle 
 
@@ -64,8 +65,63 @@ chat_room head, * tail; // make a dumy head to start of the channels in the link
 int process_request(const struct Command command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
-chat_room get_charRoom(const char * chat_name);
+chat_room get_chatRoom(const char * chat_name);
 
 int main(int argc, char** argv){
     return 0;
+}
+
+/**
+ * 
+ * Process the request from a command and utilize the function based on the request
+ * 
+ * @parameter Command       parsed command with the appropriate flag and the chat room name
+ * @return int              -1 if have an unsucessful request
+*/
+int process_request(const struct Command command){
+    switch(command.COMMAND_TYPE_PREFIX){
+        case CREATE:
+        case DELETE:
+        case JOIN:
+        case LIST:
+        
+    }
+}
+
+/**
+ * 
+ * handles the create a room frature for the client and sends back a sucessful Reply
+ * @parameter               name of the chat room to be created
+ * @return                  -1 if the room already exist
+*/
+int create_chatRoom(const char * chat_name){
+    
+    // first check and see if the chat room doesnt already exist
+    if(get_chatRoom(chat_name) != NULL){return -1;}
+    
+    if(head == NULL){ // make the first node
+        
+    }
+}
+
+/**
+ * 
+ * Retrieve the chat room from the linked list database
+ * 
+ * @parameter chat_name     given name to identify the chat
+ * @return chat_room        chat room of the given name, or a chat room with -1 as port number(DNE)
+*/
+chat_room* get_chatRoom(const char * chat_name){
+    chat_room * ptr = head;
+    
+    if(ptr == NULL){return ptr;}
+    
+    while(ptr != NULL){
+        if(strncmp(ptr->name,chat_name, strlen(chat_name)) == 0){
+            return ptr;
+        }
+        ptr = ptr->next;
+    }
+    
+    return NULL;
 }
