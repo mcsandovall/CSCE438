@@ -15,6 +15,12 @@
 // maximum size of data for the communication using TCP/IP
 #define MAX_DATA 256
 
+// Maximum number of room allowed
+#define MAX_ROOM 60
+
+// maximum number of memebers per room allowed
+#define MAX_MEMBER 50
+
 /*
  * This enum represents the result of a command.
  * Based on the response from the server,
@@ -55,10 +61,12 @@ typedef struct ChatRoom{
     char name[MAX_DATA];
     int port_number;
     int num_members;
-    int slave_socket[MAX_DATA];
+    int slave_socket[MAX_MEMBER];
     struct ChatRoom * next;
 } chat_room;
 
+// database for the all the channels
+chat_room room_db[MAX_ROOM];
 
 /* 
  * Reply structure is designed to be used for displaying the
