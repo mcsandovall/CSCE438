@@ -51,11 +51,12 @@ struct Command
 /**
  * Chat room datastructure 
 */
-typedef struct {
-    char room_name[MAX_DATA];
+typedef struct ChatRoom{
+    char name[MAX_DATA];
     int port_number;
     int num_members;
     int slave_socket[MAX_DATA];
+    struct ChatRoom * next;
 } chat_room;
 
 
