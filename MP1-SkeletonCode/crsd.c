@@ -64,9 +64,10 @@ chat_room *head = NULL, * tail = NULL;
 //create the functions for the server to handle 
 
 // Functions need to have threads handling the work 
-int process_request(const struct Command command);
+int process_request(const struct Command command, struct Reply * reply);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
+void get_roomList(struct Reply * reply);
 chat_room * get_chatRoom(const char * chat_name);
 
 int main(int argc, char** argv){
@@ -78,9 +79,30 @@ int main(int argc, char** argv){
  * Process the request from a command and utilize the function based on the request
  * 
  * @parameter Command       parsed command with the appropriate flag and the chat room name
- * @return int              -1 if have an unsucessful request
+ * @return int              success or error code
 */
-int process_request(const struct Command command){
+int process_request(const struct Command command, struct Reply * reply){
+    
+    switch(command.type){
+        case CREATE:
+            if(create_chatRoom(command.chat_name) < 0){ 
+                reply->status = FAILURE_ALREADY_EXISTS;
+                return FAILURE_ALREADY_EXISTS;
+            }
+            
+        case DELETE:
+            if(delete_chatRoom(command.chat_name) < 0){
+                reply->status = FAILURE_NOT_EXISTS;
+            }
+        case JOIN:
+            if(get_chatRoom(command.chat_name) == NULL){
+                reply->status = FAILURE_NOT_EXISTS;
+                return FAILURE_NOT_EXISTS;
+            }
+        case LIST:
+            get_roomList(reply);
+    }
+    reply->status = SUCCESS;
     return 0;
 }
 
@@ -159,4 +181,25 @@ chat_room* get_chatRoom(const char * chat_name){
     }
     
     return NULL;
+}
+
+/**
+ * 
+ * Gets the name of the rooms
+ * 
+ * @parameter              reply in which to append the names
+*/
+void get_roomList(struct Reply * reply){
+    char room_list[MAX_DATA];
+    room_list[0] = '\0';
+    
+    chat_room * current_room = head;
+    
+    while(current_room != NULL){
+        strcat(room_list, current_room->name);
+        strcat(room_list, ",");
+        current_room = current_room->next;
+    }
+    
+    strcpy(reply->list_room, room_list);
 }
