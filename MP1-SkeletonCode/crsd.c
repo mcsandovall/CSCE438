@@ -54,6 +54,8 @@ typedef struct ChatRoom {
     struct ChatRoom * next;
 } chat_room;
 
+int port_number = 5500;
+
 /**
  * Create a linked list in order create the channels
 */
@@ -107,9 +109,36 @@ int create_chatRoom(const char * chat_name){
     room->port_number = ++port_number;
     tail->next = room;
     tail = room;
-    retrun 0;
+    return 0;
 }
 
+/**
+ * 
+ * Delete the chat room of such name
+ * 
+ * @parameter               name of the chat room to be deleted
+ * @return                  -1 if the room doesnt exist
+*/
+int delete_chatRoom(const char * chat_name){
+
+    if(head == NULL){return -1;}
+    
+    chat_room * current = head;
+    
+    while(current->next != NULL){
+        if(strncmp(current->next->name, chat_name, strlen(chat_name)) == 0){
+            break;
+        }
+        current = current->next;
+    }
+    
+    if(current->next == NULL){return -1;} // the room doesnt exist
+    
+    chat_room * room = current->next;
+    current->next = room->next;
+    free(room);
+    return 0;
+}
 /**
  * 
  * Retrieve the chat room from the linked list database
