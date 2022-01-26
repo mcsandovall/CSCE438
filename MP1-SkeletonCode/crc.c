@@ -280,9 +280,8 @@ void process_chatmode(const char* host, const int port)
 	// ------------------------------------------------------------
 
 	// send a last message to the program that the client has been terminated
-	strcpy(msg,"TERMINATED");
-	send(sockfd,&msg,sizeof(msg), 0);
-	return;
+	strcpy(msg,"/TERMINATED");
+	send(sockfd,&msg,sizeof(msg),0);
 }
 
 void terminate_handler(int sig){

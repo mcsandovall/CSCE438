@@ -44,22 +44,13 @@ the chat room membership accordingly.
 */
 
 /**
- * ChatRoom structure is design to be used for 
- * easy storage and access information about a chat room
-*/
-
-int port_number = 3005;
-
-/**
  * Create a linked list in order create the channels
 */
 chat_room *head = NULL, * tail = NULL;
 
 //create the functions for the server to handle 
 
-// Functions need to have threads handling the work 
-int connect_to(const int port);
-Command process_request(const char * command);
+int process_request(const char * command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
 void get_roomList(struct Reply * reply);
@@ -67,9 +58,30 @@ chat_room * get_chatRoom(const char * chat_name);
 
 int main(int argc, char** argv){
     
-    
-    while(1){
+    int port_number = atoi(argv[1]);
+    int server_socket, client_socket;
+    struct sockaddr_in server, client;
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(port_number);
 
+    if(server_socket = socket(AF_INET, SOCK_STREAM, 0) < 0){
+        perror("Server: socket");
+        exit(EXIT_FAILURE);
+    }
+
+    if(bind(server_socket, (struct sockaddr *) &server, sizeof(server)) < 0){
+        perror("Server: bind");
+        exit(EXIT_FAILURE);
+    }
+
+    if(listen(server_socket,10) < 0){
+        perror("Server: listen");
+        exit(EXIT_FAILURE);
+    }
+
+    while(1){
+        // client connects to a 
     }
     return 0;
 }
@@ -109,9 +121,8 @@ int connect_to(const int port){
  * @parameter command       string of a command to be parsed into the datastructure
  * @return int              success or error code
 */
-Command process_request(const char * command){
-    
-    
+int process_request(const char * command){
+   
 }
 
 /**

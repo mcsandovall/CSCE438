@@ -16,7 +16,7 @@
 #define MAX_DATA 256
 
 // Maximum number of room allowed
-#define MAX_ROOM 60
+#define MAX_ROOM 30
 
 // maximum number of memebers per room allowed
 #define MAX_MEMBER 50
@@ -79,6 +79,7 @@ typedef struct {
     char name[MAX_DATA];
     struct sockaddr_in address;
     int socket;
+    int port_number;
     int uid;
 } client;
 
