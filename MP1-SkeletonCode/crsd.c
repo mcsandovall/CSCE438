@@ -44,17 +44,16 @@ the chat room membership accordingly.
 */
 
 /**
- * Create a linked list in order create the channels
+ * Functions for the server to talk with the client
 */
-chat_room *head = NULL, * tail = NULL;
+int create_room(const char * room_name);
+int join_room(const char * room_name);
+int delete_room(const char * room_name);
+chat_room_t * search(const char * room_name);
 
-//create the functions for the server to handle 
-
-int process_request(const char * command);
-int create_chatRoom(const char * chat_name);
-int delete_chatRoom(const char * chat_name);
-void get_roomList(struct Reply * reply);
-chat_room * get_chatRoom(const char * chat_name);
+// Database of rooms 
+chat_room_t room_db[MAX_ROOM];
+int num_rooms = 0;
 
 int main(int argc, char** argv){
     
@@ -86,147 +85,24 @@ int main(int argc, char** argv){
     return 0;
 }
 
-/**
- * 
- * Establishing communication for a port number
- * 
- * @param           port number to be binded
- * @return          -1 if there is a problem with the code, 0 if it worked
-*/
-
-int connect_to(const int port){
-
-    int sockfd;
-    struct sockaddr_in servaddr;
-
-    //socket create
-    if((sockfd = socket(AF_INET,SOCK_STREAM, 0)) < 0){
-        perror("Socket creation failed");
-        return -1;
-    }
-
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port = htons(port);
-
-    
-
-    return 0;
+int create_room(const char * room_name){
+    return -1;
 }
 
-/**
- * 
- * Process the request from a command and utilize the function based on the request
- * 
- * @parameter command       string of a command to be parsed into the datastructure
- * @return int              success or error code
-*/
-int process_request(const char * command){
-   
+int join_room(const char * room_name){
+    return -1;
 }
 
-/**
- * 
- * handles the create a room frature for the client and sends back a sucessful Reply
- * @parameter               name of the chat room to be created
- * @return                  -1 if the room already exist
-*/
-int create_chatRoom(const char * chat_name){
-    
-    // first check and see if the chat room doesnt already exist
-    if(get_chatRoom(chat_name) != NULL){return -1;}
-    
-    chat_room * room = (chat_room *) malloc(sizeof(chat_room));
-    strcpy(room->name,chat_name);
-
-    //create a new master socket 
-
-    // new entry in the database
-    if(head == NULL){ // make the first node
-        room->port_number = port_number;
-        room->next = NULL;
-        head = room;
-        tail = room;
-        return 0;
-    }
-    
-    room->port_number = ++port_number;
-    tail->next = room;
-    tail = room;
-    return 0;
+int delete_room(const char * room_name){
+    return -1;
 }
 
-/**
- * 
- * Delete the chat room of such name
- * 
- * @parameter               name of the chat room to be deleted
- * @return                  -1 if the room doesnt exist
-*/
-int delete_chatRoom(const char * chat_name){
-
-    if(head == NULL){return -1;}
-
-    //send a warning message to all the clients connected to the chat
-
-    // close the master socket for that room
-    
-    // delete that room 
-    chat_room * current = head;
-    
-    while(current->next != NULL){
-        if(strncmp(current->next->name, chat_name, strlen(chat_name)) == 0){
-            break;
+chat_room_t * search(const char * room_name){
+    int i;
+    for(i = 0; i < num_rooms; ++i){
+        if(strncmp(room_db[i], room_name, strlen(room_name)) == 0){
+            return &room_db[i]; 
         }
-        current = current->next;
     }
-    
-    if(current->next == NULL){return -1;} // the room doesnt exist
-    
-    chat_room * room = current->next;
-    current->next = room->next;
-    free(room);
-    return 0;
-}
-/**
- * 
- * Retrieve the chat room from the linked list database
- * 
- * @parameter chat_name     given name to identify the chat
- * @return chat_room        chat room of the given name, or a chat room with -1 as port number(DNE)
-*/
-chat_room* get_chatRoom(const char * chat_name){
-    chat_room * ptr = head;
-    
-    if(ptr == NULL){return ptr;}
-    
-    while(ptr != NULL){
-        if(strncmp(ptr->name,chat_name, strlen(chat_name)) == 0){
-            return ptr;
-        }
-        ptr = ptr->next;
-    }
-    
     return NULL;
-}
-
-/**
- * 
- * Gets the name of the rooms
- * 
- * @parameter              reply in which to append the names
-*/
-void get_roomList(struct Reply * reply){
-    char room_list[MAX_DATA];
-    room_list[0] = '\0';
-    
-    chat_room * current_room = head;
-    
-    while(current_room != NULL){
-        strcat(room_list, current_room->name);
-        strcat(room_list, ",");
-        current_room = current_room->next;
-    }
-    
-    strcpy(reply->list_room, room_list);
 }
