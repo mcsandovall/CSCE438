@@ -59,7 +59,7 @@ chat_room *head = NULL, * tail = NULL;
 
 // Functions need to have threads handling the work 
 int connect_to(const int port);
-int process_request(const Command command, struct Reply * reply);
+Command process_request(const char * command);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
 void get_roomList(struct Reply * reply);
@@ -106,38 +106,12 @@ int connect_to(const int port){
  * 
  * Process the request from a command and utilize the function based on the request
  * 
- * @parameter Command       parsed command with the appropriate flag and the chat room name
+ * @parameter command       string of a command to be parsed into the datastructure
  * @return int              success or error code
 */
-int process_request(const Command command, struct Reply * reply){
+Command process_request(const char * command){
     
-    switch(command.type){
-        case CREATE:
-            if(create_chatRoom(command.chat_name) < 0){ 
-                reply->status = FAILURE_ALREADY_EXISTS;
-                return FAILURE_ALREADY_EXISTS;
-            }
-            //infrom the client about the result
-            
-        case DELETE:
-            if(delete_chatRoom(command.chat_name) < 0){
-                reply->status = FAILURE_NOT_EXISTS;
-                return FAILURE_NOT_EXISTS;
-            }
-
-
-        case JOIN:
-            chat_room * room = get_chatRoom(command.chat_name);
-            if(room == NULL){
-                reply->status = FAILURE_NOT_EXISTS;
-                return FAILURE_NOT_EXISTS;
-            }
-            return room->port_number;
-        case LIST:
-            get_roomList(reply);
-    }
-    reply->status = SUCCESS;
-    return 0;
+    
 }
 
 /**

@@ -45,13 +45,15 @@ enum COMMAND_TYPE_PREFIX
     DELETE,
     JOIN,
     LIST,
-    UNKNOWN
+    UNKNOWN,
+    TERMINATE
 };
 
 typedef struct
 {
     enum COMMAND_TYPE_PREFIX type;
     char chat_name[MAX_DATA];
+    char message[MAX_DATA];
 } Command;
 
 /**

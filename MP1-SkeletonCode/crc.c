@@ -16,6 +16,10 @@
 int connect_to(const char *host, const int port);
 struct Reply process_command(const int sockfd, char* command);
 void process_chatmode(const char* host, const int port);
+void terminate_handler(int sig); // this is the functin that will handle the process being terminated
+void recv_message(const int sockfd); // function to recieve messages and display them to the terminal
+int terminate_chat = 0; // this flag allows to run chat mode until CNTR_C
+
 
 int main(int argc, char** argv) 
 {
@@ -26,6 +30,7 @@ int main(int argc, char** argv)
 	}
 
     display_title();
+	signal(SIGINT, terminate_handler);
     
 	while (1) {
 	
@@ -159,13 +164,13 @@ struct Reply process_command(const int sockfd, char* command)
 	// ------------------------------------------------------------
 
 	//send the command to the server as it is so that the server can parse this command
-	if(write(sockfd, &cmd, sizeof(cmd)) < 0){
+	if(send(sockfd, &cmd, sizeof(cmd), 0) < 0){
 		perror("Error: Command not able to be sent");
 		return reply;
 	}
 
 	// recieve reply from the server
-	if(read(sockfd, &reply, sizeof(struct Reply)) < 0){
+	if(recv(sockfd, &reply, sizeof(struct Reply), 0) < 0){
 		perror("Error: Invalid response from Server");
 		return reply;
 	}
@@ -239,17 +244,26 @@ void process_chatmode(const char* host, const int port)
 	// the server.
 	// ------------------------------------------------------------
 	char user_msg[MAX_DATA];
-	get_message(user_msg, MAX_DATA); // get message from the user
+	get_message(&user_msg, MAX_DATA); // get message from the user
 	
-	// send the message to the server
-	if(write(sockfd, user_msg, MAX_DATA) < 0){
+	// send a message from the user to the server
+	if(send(sockfd, user_msg, MAX_DATA, 0) < 0){
 		perror("Error: Message can not be sent");
 		return;
 	}
-	
-	
-	
-	
+
+	//start a thread to handle the chat recieving while the user inputs a message
+	pthread_t recv_thread;
+	pthread_create(&recv_thread, NULL, (void *) recv_message, NULL);
+	char msg[MAX_DATA];
+
+	while(!terminate_chat){
+		// recieve input form the user
+		get_message(&msg, MAX_DATA);
+
+		// send the message
+		send(sockfd, &msg, sizeof(msg), 0);
+	}	
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     // 1. To get a message from a user, you should use a function
@@ -264,5 +278,20 @@ void process_chatmode(const char* host, const int port)
     //    Don't have to worry about this situation, and you can 
     //    terminate the client program by pressing CTRL-C (SIGINT)
 	// ------------------------------------------------------------
+
+	// send a last message to the program that the client has been terminated
+	strcpy(msg,"TERMINATED");
+	send(sockfd,&msg,sizeof(msg), 0);
+	return;
 }
 
+void terminate_handler(int sig){
+	terminate_chat = 1;
+}
+
+void recv_message(const int sockfd){
+	char msg[MAX_DATA];
+	while(recv(sockfd,msg,MAX_DATA,0) > 0){
+		display_message(&msg);
+	}
+}
