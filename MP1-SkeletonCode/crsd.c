@@ -51,6 +51,7 @@ struct Reply join_room(const char * room_name, cons);
 struct Reply delete_room(const char * room_name);
 chat_room_t * search(const char * room_name);
 void send_message(const chat_room_t chat_room, const char * message);
+void client_worker(const chat_room_t * room);
 
 // Database of rooms 
 chat_room_t room_db[MAX_ROOM];
@@ -126,6 +127,7 @@ struct Reply create_room(const char * room_name, const int client_socket){
     new_room.num_members = 0;
     strcpy(new_room.name,room_name);
     new_room.master_socket = sockfd;
+    new_room.address = socket;
     room_db[num_rooms] = new_room;
     ++num_rooms;
     
@@ -188,6 +190,22 @@ void send_message(const chat_room_t * chat_room, const char * message){
     for(i = 1; i <= chat_room->num_members; ++i){
         if(send(chat_room->slave_socket[i], message, sizeof(message), 0) < 0){
             perror("Message: can not be sent");
+        }
+    }
+}
+
+void client_worker(const chat_room_t *room){
+    
+    // listen with the master socket, and create a new sockfd for every client that 
+    if(listen(room->slave_socket[0], MAX_MEMBER) < 0){
+        perror("Server: listen");
+    }
+    int client_socket;
+    while(1){
+        if(client_socket = accept(room->slave_socket[0], (struct sockaddr *) room->address, sizeof(room->address)) > -1){
+            // add the client socket to the db in the chat room
+            room->slave_socket[num_members + 1]; // 0 is master socket
+            room->num_members = room->num_members + 1;
         }
     }
 }

@@ -63,8 +63,9 @@ typedef struct{
     char name[MAX_DATA];
     int port_number;
     int num_members;
+    struct sockaddr_in address;
     int slave_socket[MAX_MEMBER];
-    client_t * client_db[MAX_MEMBER]
+    client_t client_db[MAX_MEMBER]
 } chat_room_t;
 
 
