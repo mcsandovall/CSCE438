@@ -46,9 +46,9 @@ the chat room membership accordingly.
 /**
  * Functions for the server to talk with the client
 */
-int create_room(const char * room_name, const int server_socket);
-int join_room(const char * room_name);
-int delete_room(const char * room_name);
+struct Reply create_room(const char * room_name, const int server_socket);
+struct Reply join_room(const char * room_name, cons);
+struct Reply delete_room(const char * room_name);
 chat_room_t * search(const char * room_name);
 
 // Database of rooms 
@@ -88,7 +88,7 @@ int main(int argc, char** argv){
     return 0;
 }
 
-int create_room(const char * room_name, const int client_socket){
+struct Reply create_room(const char * room_name, const int client_socket){
     // send a reply to the client
     struct Reply reply;
     reply.status = SUCCESS;
@@ -97,11 +97,7 @@ int create_room(const char * room_name, const int client_socket){
     chat_room_t * room =  search(room_name);
     if(room != NULL){
         reply.status = FAILURE_ALREADY_EXISTS;
-        if(send(client_socket, &reply, sizeof(reply), 0) < 0){
-            perror("server: message unsent");
-            return -1;
-        }
-        return -1;
+        return reply;
     }
     
     // open a new master socket
@@ -114,45 +110,45 @@ int create_room(const char * room_name, const int client_socket){
     if(sockfd = socket(AF_INET, SOCK_STREAM, 0) < 0){
         reply.status = FAILURE_UNKNOWN;
         perror("server: create the socket");
-        
+        return reply;
     }
     
     if(bind(sockfd, (struct sockaddr *) &server, sizeof(server)) < 0){
         reply.status = FAILURE_UNKNOWN;
         perror("Server: bind");
+        return reply;
+    }
+    
+    // create a new entry in the db
+    chat_room_t new_room;
+    new_room.port_number = port_number;
+    new_room.num_members = 0;
+    strcpy(new_room.name,room_name);
+    room_db[num_rooms] = new_room;
+    ++num_rooms;
         
-    }
+    // make a thread to start listening and accepting conections for the clients
     
-    // make the a thread wait for the clients to connect
     
-    // create a new entry in the db if the all the process where successful
-    if(reply.result == SUCCESS){
-        chat_room_t new_room;
-        new_room.port_number = port_number;
-        new_room.num_members = 0;
-        strcpy(new_room.name,room_name);
-        room_db[num_rooms] = new_room;
-        ++num_rooms;
-    }
-    
-    if(send(client_socket, &reply, sizeof(reply), 0) < 0){
-        perror("server: message unsent");
-        return -1;
-    }
-    
-    return sockfd;
+    return reply;
 }
 
-int join_room(const char * room_name){
+struct Reply join_room(const char * room_name){
     // create a reply for the server to send in case of the command 
     struct Reply reply;
-    reply.status = ;
+    reply.status = SUCCESS;
     // check if the room exist
     chat_room_t * room  = search(room_name);
     if(room == NULL){
-        
+        reply.status = FAILURE_NOT_EXISTS;
+        return reply;
     }
-    return -1;
+    
+    // return the port number and the amount of people in the chat room
+    reply.port = room.port_number;
+    reply.num_member = room.num_members;
+    
+    return reply;
 }
 
 int delete_room(const char * room_name){
