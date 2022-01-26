@@ -50,6 +50,7 @@ struct Reply create_room(const char * room_name, const int server_socket);
 struct Reply join_room(const char * room_name, cons);
 struct Reply delete_room(const char * room_name);
 chat_room_t * search(const char * room_name);
+void send_message(const chat_room_t chat_room, const char * message);
 
 // Database of rooms 
 chat_room_t room_db[MAX_ROOM];
@@ -124,9 +125,10 @@ struct Reply create_room(const char * room_name, const int client_socket){
     new_room.port_number = port_number;
     new_room.num_members = 0;
     strcpy(new_room.name,room_name);
+    new_room.master_socket = sockfd;
     room_db[num_rooms] = new_room;
     ++num_rooms;
-        
+    
     // make a thread to start listening and accepting conections for the clients
     
     
@@ -151,8 +153,23 @@ struct Reply join_room(const char * room_name){
     return reply;
 }
 
-int delete_room(const char * room_name){
-    return -1;
+struct Reply delete_room(const char * room_name){
+    struct Reply reply;
+    reply.status = SUCCESS;
+    
+    // check if the room exist
+    chat_room_t * room = search(room_name);
+    if(room == NULL){
+        reply.status = FAILURE_NOT_EXISTS;
+        return reply;
+    }
+    
+    // send a warning message to everyone
+    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE");
+    
+    // close the master socket
+    close(*(room->slave_socket[0]));
+    return reply;
 }
 
 chat_room_t * search(const char * room_name){
@@ -163,4 +180,14 @@ chat_room_t * search(const char * room_name){
         }
     }
     return NULL;
+}
+
+void send_message(const chat_room_t * chat_room, const char * message){
+    // send a message to all clients in the chat room
+    int i;
+    for(i = 1; i <= chat_room->num_members; ++i){
+        if(send(chat_room->slave_socket[i], message, sizeof(message), 0) < 0){
+            perror("Message: can not be sent");
+        }
+    }
 }
