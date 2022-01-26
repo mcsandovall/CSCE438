@@ -50,8 +50,10 @@ struct Reply create_room(const char * room_name, const int server_socket);
 struct Reply join_room(const char * room_name, cons);
 struct Reply delete_room(const char * room_name);
 chat_room_t * search(const char * room_name);
+void process_command(const int client_port);
 void send_message(const chat_room_t chat_room, const char * message);
 void client_worker(const chat_room_t * room);
+void listen_worker(const chat_room_t * room, const int client_port);
 
 // Database of rooms 
 chat_room_t room_db[MAX_ROOM];
@@ -77,15 +79,19 @@ int main(int argc, char** argv){
         exit(EXIT_FAILURE);
     }
 
-    if(listen(server_socket,20) < 0){
+    if(listen(server_socket,MAX_MEMBER) < 0){
         perror("Server: listen");
         exit(EXIT_FAILURE);
     }
 
     while(1){
         if(client_socket = accept(server_socket, (struct sockaddr *) &server, sizeof(server)) < 0){
-            perror("server: accep");
+            perror("server: accept");
         }
+        
+        // make a thread that parses the command
+        pthread_t ctid;
+        pthread_create(&ctid, NULL, &process_command, client_socket);
     }
     return 0;
 }
@@ -184,6 +190,27 @@ chat_room_t * search(const char * room_name){
     return NULL;
 }
 
+void process_command(const int client_port){
+    command cmd;
+    struct Reply reply;
+    while(recv(client_port, &cmd, sizeof(cmd)) > 0){
+        switch(cmd.type){
+            case CREATE:
+                reply = create_room(cmd.chat_name);
+            case DELETE:
+                reply = delete_room(cmd.chat_name);
+            case JOIN:
+                reply = join_room(cmd.chat_name);
+            case LIST:
+                reply = room_list(cmd.chat_name);
+        }
+        send(client_port, &reply, sizeof(reply), 0);
+        if(cmd.type == JOIN){ // no more commands after join
+            break;
+        }
+    }
+}
+
 void send_message(const chat_room_t * chat_room, const char * message){
     // send a message to all clients in the chat room
     int i;
@@ -207,5 +234,7 @@ void client_worker(const chat_room_t *room){
             room->slave_socket[num_members + 1]; // 0 is master socket
             room->num_members = room->num_members + 1;
         }
+        
+        
     }
 }
