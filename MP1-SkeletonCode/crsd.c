@@ -138,7 +138,8 @@ struct Reply create_room(const char * room_name, const int client_socket){
     ++num_rooms;
     
     // make a thread to start listening and accepting conections for the clients
-    
+    pthread_t tid;
+    pthread_create(&tid, NULL, &client_worker, &new_room);
     
     return reply;
 }
@@ -233,8 +234,17 @@ void client_worker(const chat_room_t *room){
             // add the client socket to the db in the chat room
             room->slave_socket[num_members + 1]; // 0 is master socket
             room->num_members = room->num_members + 1;
+            
+            // make a thread that listens to the client and send message to the room
+            pthread_t ltid;
+            pthread_create(ltid, NULL, listen_worker, room, client_socket);
         }
-        
-        
+    }
+}
+
+void listen_worker(const chat_room_t * room, const int client_port){
+    char buff[MAX_DATA];
+    while(recv(client_port, &buff, MAX_DATA, 0) > -1){
+        send_message(room, buff);
     }
 }
