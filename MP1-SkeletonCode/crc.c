@@ -73,7 +73,7 @@ int connect_to(const char *host, const int port)
 	// int sockfd = -1;
 	// return sockfd;
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (!sockfd){
+	if (sockfd < 0){
 		perror("Error creating socket");
 		return sockfd;
 	}

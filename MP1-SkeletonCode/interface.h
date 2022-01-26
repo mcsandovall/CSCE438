@@ -68,6 +68,18 @@ typedef struct ChatRoom{
 // database for the all the channels
 chat_room room_db[MAX_ROOM];
 
+
+/**
+ * Client Datastructure 
+*/
+
+typedef struct {
+    char name[MAX_DATA];
+    struct sockaddr_in address;
+    int socket;
+    int uid;
+} client;
+
 /* 
  * Reply structure is designed to be used for displaying the
  * result of the command that has been sent to the server.

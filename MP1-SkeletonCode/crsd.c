@@ -48,7 +48,7 @@ the chat room membership accordingly.
  * easy storage and access information about a chat room
 */
 
-int port_number = 5500;
+int port_number = 3005;
 
 /**
  * Create a linked list in order create the channels
@@ -58,6 +58,7 @@ chat_room *head = NULL, * tail = NULL;
 //create the functions for the server to handle 
 
 // Functions need to have threads handling the work 
+int connect_to(const int port);
 int process_request(const Command command, struct Reply * reply);
 int create_chatRoom(const char * chat_name);
 int delete_chatRoom(const char * chat_name);
@@ -65,6 +66,39 @@ void get_roomList(struct Reply * reply);
 chat_room * get_chatRoom(const char * chat_name);
 
 int main(int argc, char** argv){
+    
+    
+    while(1){
+
+    }
+    return 0;
+}
+
+/**
+ * 
+ * Establishing communication for a port number
+ * 
+ * @param           port number to be binded
+ * @return          -1 if there is a problem with the code, 0 if it worked
+*/
+
+int connect_to(const int port){
+
+    int sockfd;
+    struct sockaddr_in servaddr;
+
+    //socket create
+    if((sockfd = socket(AF_INET,SOCK_STREAM, 0)) < 0){
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(port);
+
+    
+
     return 0;
 }
 
@@ -83,16 +117,22 @@ int process_request(const Command command, struct Reply * reply){
                 reply->status = FAILURE_ALREADY_EXISTS;
                 return FAILURE_ALREADY_EXISTS;
             }
+            //infrom the client about the result
             
         case DELETE:
             if(delete_chatRoom(command.chat_name) < 0){
                 reply->status = FAILURE_NOT_EXISTS;
+                return FAILURE_NOT_EXISTS;
             }
+
+
         case JOIN:
-            if(get_chatRoom(command.chat_name) == NULL){
+            chat_room * room = get_chatRoom(command.chat_name);
+            if(room == NULL){
                 reply->status = FAILURE_NOT_EXISTS;
                 return FAILURE_NOT_EXISTS;
             }
+            return room->port_number;
         case LIST:
             get_roomList(reply);
     }
@@ -113,7 +153,10 @@ int create_chatRoom(const char * chat_name){
     
     chat_room * room = (chat_room *) malloc(sizeof(chat_room));
     strcpy(room->name,chat_name);
-    
+
+    //create a new master socket 
+
+    // new entry in the database
     if(head == NULL){ // make the first node
         room->port_number = port_number;
         room->next = NULL;
@@ -138,7 +181,12 @@ int create_chatRoom(const char * chat_name){
 int delete_chatRoom(const char * chat_name){
 
     if(head == NULL){return -1;}
+
+    //send a warning message to all the clients connected to the chat
+
+    // close the master socket for that room
     
+    // delete that room 
     chat_room * current = head;
     
     while(current->next != NULL){
