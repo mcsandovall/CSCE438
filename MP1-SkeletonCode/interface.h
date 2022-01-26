@@ -16,10 +16,10 @@
 #define MAX_DATA 256
 
 // Maximum number of room allowed
-#define MAX_ROOM 30
+#define MAX_ROOM 50
 
 // maximum number of memebers per room allowed
-#define MAX_MEMBER 50
+#define MAX_MEMBER 30
 
 /*
  * This enum represents the result of a command.
@@ -59,16 +59,13 @@ typedef struct
 /**
  * Chat room datastructure 
 */
-typedef struct ChatRoom{
+typedef struct{
     char name[MAX_DATA];
     int port_number;
     int num_members;
     int slave_socket[MAX_MEMBER];
-    struct ChatRoom * next;
-} chat_room;
-
-// database for the all the channels
-chat_room room_db[MAX_ROOM];
+    client_t * client_db[MAX_MEMBER]
+} chat_room_t;
 
 
 /**
@@ -76,12 +73,11 @@ chat_room room_db[MAX_ROOM];
 */
 
 typedef struct {
-    char name[MAX_DATA];
     struct sockaddr_in address;
     int socket;
     int port_number;
     int uid;
-} client;
+} client_t;
 
 /* 
  * Reply structure is designed to be used for displaying the
