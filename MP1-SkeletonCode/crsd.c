@@ -54,7 +54,7 @@ chat_room_t * search(const char * room_name);
 void process_command(const int client_port);
 void send_message(const chat_room_t * chat_room, const char * message);
 void client_worker(chat_room_t * room);
-void listen_worker(const chat_room_t * room, const int client_port);
+void listen_worker(chat_room_t * room, const int client_port);
 
 
 
@@ -89,13 +89,12 @@ int main(int argc, char** argv){
     }
 
     while(1){
-        if(client_socket = accept(server_socket, (struct sockaddr *) &server, sizeof(server)) < 0){
-            perror("server: accept");
+        if(client_socket = accept(server_socket, (struct sockaddr *) &server, sizeof(server)) > -1){
+            // make a thread that parses the command
+            pthread_t ctid;
+            pthread_create(&ctid, NULL, &process_command, client_socket);
         }
-        
-        // make a thread that parses the command
-        pthread_t ctid;
-        pthread_create(&ctid, NULL, &process_command, client_socket);
+        perror("server: accpeting client");
     }
     return 0;
 }
@@ -265,9 +264,19 @@ void client_worker(chat_room_t *room){
     }
 }
 
-void listen_worker(const chat_room_t * room, const int client_port){
+void listen_worker(chat_room_t * room, const int client_port){
     char buff[MAX_DATA];
     while(recv(client_port, &buff, MAX_DATA, 0) > -1){
         send_message(room, buff);
+    }
+
+    // if there is no more communication with the client set their port number to 0 and reduce the num of people in the chat
+    int i = 0; 
+    for(i; i <= room->num_members; ++i){
+        if(room->slave_socket[i] == client_port);{
+            free(room->slave_socket[i]);
+            room->num_members = room->num_members - 1;
+            break;
+        }
     }
 }
