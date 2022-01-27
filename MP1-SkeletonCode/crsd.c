@@ -90,7 +90,7 @@ int main(int argc, char** argv){
     socklen_t addr_size = sizeof(server);
     while(1){
         if((client_socket = accept(server_socket, (struct sockaddr *) &server, &addr_size)) > -1){
-            // make a thread that parses the command
+            // make a thread that parses the command for that client
             pthread_t ctid;
             pthread_create(&ctid, NULL, (void *) &process_command, &client_socket);
         }
@@ -99,6 +99,13 @@ int main(int argc, char** argv){
     return 0;
 }
 
+/**
+ * 
+ * Creates a room from a given name, adds it to the database and starts a thread on that channel to handle communications
+ * 
+ * @parameter room_name             name of the room given by the client
+ * @return  Reply                   retruns a constructed reply to send the client
+*/
 struct Reply create_room(const char * room_name){
     // send a reply to the client
     struct Reply reply;
@@ -146,7 +153,13 @@ struct Reply create_room(const char * room_name){
     
     return reply;
 }
-
+/**
+ * 
+ * Handles the join room command and construct the necesary reply for the client to connect with that port
+ * 
+ * @parameter room_name             name of the room given by client
+ * @return Reply                    constructed reply with the number of clients connected and the port number
+*/
 struct Reply join_room(const char * room_name){
     // create a reply for the server to send in case of the command 
     struct Reply reply;
@@ -165,6 +178,13 @@ struct Reply join_room(const char * room_name){
     return reply;
 }
 
+/**
+ * 
+ * Deletes a room from the database and sends a message to all connected clients
+ * 
+ * @parameter room_name             name of the room to delete
+ * @retrun  Reply                   constructed reply with the appropraite status
+*/
 struct Reply delete_room(const char * room_name){
     struct Reply reply;
     reply.status = SUCCESS;
@@ -184,6 +204,12 @@ struct Reply delete_room(const char * room_name){
     return reply;
 }
 
+/**
+ * 
+ * Gets the names of all current rooms
+ * 
+ * @return Reply            reply with all the names of the rooms added to the member list_room
+*/
 struct Reply room_list(){
     struct Reply reply;
     reply.status = SUCCESS;
@@ -201,6 +227,13 @@ struct Reply room_list(){
     return reply;
 }
 
+/**
+ * 
+ * Searches in the database for the given room
+ * 
+ * @parameter room_name             name of the room to be searched in the db
+ * @return chat_room_t *              NULL if the room was not found, else return a pointer to the room
+*/
 chat_room_t * search(const char * room_name){
     int i;
     for(i = 0; i < num_rooms; ++i){
@@ -211,6 +244,12 @@ chat_room_t * search(const char * room_name){
     return NULL;
 }
 
+/**
+ * 
+ * Processes commands recived from clients, takes appropriate action and sends reply to client
+ * 
+ * @parameter client_port               socket the client established for communication
+*/
 void process_command(const int client_port){
     Command cmd;
     struct Reply reply;
@@ -234,6 +273,14 @@ void process_command(const int client_port){
     }
 }
 
+/**
+ * 
+ * Sends message to all users in a given chat room 
+ * 
+ * @parameter chat_room             pointer to a chat room which message should be sent 
+ * @parameter message               user defined message to be send to users in chat room
+ * 
+*/
 void send_message(const chat_room_t * chat_room, const char * message){
     pthread_mutex_lock(&mtx);
     // send a message to all clients in the chat room
@@ -246,6 +293,12 @@ void send_message(const chat_room_t * chat_room, const char * message){
     pthread_mutex_unlock(&mtx);
 }
 
+/**
+ * 
+ * Used by thread, handles the work of listening and accepting for all clients connecting to a chat room
+ * 
+ * @parameter room          pointer to a chat room to in which to add new memebers to 
+*/
 void client_worker(chat_room_t *room){
     
     // listen with the master socket, and create a new sockfd for every client that 
@@ -269,6 +322,12 @@ void client_worker(chat_room_t *room){
     }
 }
 
+/**
+ * 
+ * used by thread, listens for all the communcations from a client and send messages to a chat room
+ * 
+ * @parameter room              room in whcih all communication occurs
+*/
 void listen_worker(chat_room_t * room){
     char buff[MAX_DATA];
     int client_id = room->num_members;
