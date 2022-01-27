@@ -46,19 +46,23 @@ the chat room membership accordingly.
 /**
  * Functions for the server to talk with the client
 */
-struct Reply create_room(const char * room_name, const int server_socket);
-struct Reply join_room(const char * room_name, cons);
+struct Reply create_room(const char * room_name);
+struct Reply join_room(const char * room_name);
 struct Reply delete_room(const char * room_name);
+struct Reply room_list();
 chat_room_t * search(const char * room_name);
 void process_command(const int client_port);
-void send_message(const chat_room_t chat_room, const char * message);
-void client_worker(const chat_room_t * room);
+void send_message(const chat_room_t * chat_room, const char * message);
+void client_worker(chat_room_t * room);
 void listen_worker(const chat_room_t * room, const int client_port);
+
+
 
 // Database of rooms 
 chat_room_t room_db[MAX_ROOM];
 int num_rooms = 0;
 int port_number;
+pthread_mutex_t mtx;
 
 int main(int argc, char** argv){
     
@@ -96,7 +100,7 @@ int main(int argc, char** argv){
     return 0;
 }
 
-struct Reply create_room(const char * room_name, const int client_socket){
+struct Reply create_room(const char * room_name){
     // send a reply to the client
     struct Reply reply;
     reply.status = SUCCESS;
@@ -110,10 +114,10 @@ struct Reply create_room(const char * room_name, const int client_socket){
     
     // open a new master socket
     int sockfd;;
-    struct sockaddr_in socket;
-    socket.sin_family = AF_INET;
-    socket.sin_addr.s_addr = INADDR_ANY;
-    socket.sin_port = htons(++port_number);
+    struct sockaddr_in server_socket;
+    server_socket.sin_family = AF_INET;
+    server_socket.sin_addr.s_addr = INADDR_ANY;
+    server_socket.sin_port = htons(++port_number);
     
     if(sockfd = socket(AF_INET, SOCK_STREAM, 0) < 0){
         reply.status = FAILURE_UNKNOWN;
@@ -121,7 +125,7 @@ struct Reply create_room(const char * room_name, const int client_socket){
         return reply;
     }
     
-    if(bind(sockfd, (struct sockaddr *) &server, sizeof(server)) < 0){
+    if(bind(sockfd, (struct sockaddr *) &server_socket, sizeof(server_socket)) < 0){
         reply.status = FAILURE_UNKNOWN;
         perror("Server: bind");
         return reply;
@@ -132,8 +136,8 @@ struct Reply create_room(const char * room_name, const int client_socket){
     new_room.port_number = port_number;
     new_room.num_members = 0;
     strcpy(new_room.name,room_name);
-    new_room.master_socket = sockfd;
-    new_room.address = socket;
+    new_room.slave_socket[0] = sockfd;
+    new_room.address = server_socket;
     room_db[num_rooms] = new_room;
     ++num_rooms;
     
@@ -156,8 +160,8 @@ struct Reply join_room(const char * room_name){
     }
     
     // return the port number and the amount of people in the chat room
-    reply.port = room.port_number;
-    reply.num_member = room.num_members;
+    reply.port = room->port_number;
+    reply.num_member = room->num_members;
     
     return reply;
 }
@@ -177,14 +181,31 @@ struct Reply delete_room(const char * room_name){
     send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE");
     
     // close the master socket
-    close(*(room->slave_socket[0]));
+    close(room->slave_socket[0]);
+    return reply;
+}
+
+struct Reply room_list(){
+    struct Reply reply;
+    reply.status = SUCCESS;
+    
+    char room_list[MAX_DATA];
+    room_list[0] = '\0';
+
+    int i;
+    for(i = 0; i < num_rooms; ++i){
+        strcat(room_list,room_db[i].name);
+        strcat(room_db,",");
+    }
+
+    strcpy(reply.list_room,room_list);
     return reply;
 }
 
 chat_room_t * search(const char * room_name){
     int i;
     for(i = 0; i < num_rooms; ++i){
-        if(strncmp(room_db[i], room_name, strlen(room_name)) == 0){
+        if(strncmp(room_db[i].name, room_name, strlen(room_name)) == 0){
             return &room_db[i]; 
         }
     }
@@ -192,9 +213,9 @@ chat_room_t * search(const char * room_name){
 }
 
 void process_command(const int client_port){
-    command cmd;
+    Command cmd;
     struct Reply reply;
-    while(recv(client_port, &cmd, sizeof(cmd)) > 0){
+    while(recv(client_port, &cmd, sizeof(cmd), 0) > 0){
         switch(cmd.type){
             case CREATE:
                 reply = create_room(cmd.chat_name);
@@ -213,6 +234,7 @@ void process_command(const int client_port){
 }
 
 void send_message(const chat_room_t * chat_room, const char * message){
+    pthread_mutex_lock(&mtx);
     // send a message to all clients in the chat room
     int i;
     for(i = 1; i <= chat_room->num_members; ++i){
@@ -220,9 +242,10 @@ void send_message(const chat_room_t * chat_room, const char * message){
             perror("Message: can not be sent");
         }
     }
+    pthread_mutex_unlock(&mtx);
 }
 
-void client_worker(const chat_room_t *room){
+void client_worker(chat_room_t *room){
     
     // listen with the master socket, and create a new sockfd for every client that 
     if(listen(room->slave_socket[0], MAX_MEMBER) < 0){
@@ -230,9 +253,9 @@ void client_worker(const chat_room_t *room){
     }
     int client_socket;
     while(1){
-        if(client_socket = accept(room->slave_socket[0], (struct sockaddr *) room->address, sizeof(room->address)) > -1){
+        if(client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, sizeof(room->address)) > -1){
             // add the client socket to the db in the chat room
-            room->slave_socket[num_members + 1]; // 0 is master socket
+            room->slave_socket[room->num_members + 1]; // 0 is master socket
             room->num_members = room->num_members + 1;
             
             // make a thread that listens to the client and send message to the room
