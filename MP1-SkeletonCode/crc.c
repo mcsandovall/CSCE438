@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include "interface.h"
 
 
@@ -20,6 +21,7 @@ void process_chatmode(const char* host, const int port);
 void terminate_handler(int sig); // this is the functin that will handle the process being terminated
 void recv_message(const int sockfd); // function to recieve messages and display them to the terminal
 int terminate_chat = 0; // this flag allows to run chat mode until CNTR_C
+int ip_converter(const char * host, char * ip);
 
 
 int main(int argc, char** argv) 
@@ -83,9 +85,11 @@ int connect_to(const char *host, const int port)
 		perror("Error creating socket");
 		return sockfd;
 	}
+	char ip[MAX_DATA];
+	ip_converter((char *) &host,(char *) &ip);
 	struct sockaddr_in server;
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = htonl(host);
+	server.sin_addr.s_addr = htonl(ip);
 	server.sin_port = htons(port);
 	if (connect(sockfd, (struct sockaddr*) &server, sizeof(server)) < 0){
 		perror("Error connecting to server");
@@ -291,4 +295,24 @@ void recv_message(const int sockfd){
 	while(recv(sockfd,msg,MAX_DATA,0) > 0){
 		display_message((char *) &msg);
 	}
+}
+
+int ip_converter(const char * host, char * ip){
+	struct hostent *_host;
+	struct in_addr **addr_list;
+	
+	int i;
+	if ( (_host = gethostbyname(host)) == NULL) {
+		return -1;
+	}
+
+	addr_list = (struct in_addr **) _host->h_addr_list;
+	
+	for(i = 0; addr_list[i] != NULL; i++) {
+		//Return the first one;
+		strcpy(ip , inet_ntoa(*addr_list[i]) );
+		return 0;
+	}
+	
+	return -1;
 }
