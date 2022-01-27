@@ -73,7 +73,7 @@ int main(int argc, char** argv){
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = htons(port_number);
 
-    if(server_socket = socket(AF_INET, SOCK_STREAM, 0) < 0){
+    if((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Server: socket");
         exit(EXIT_FAILURE);
     }
@@ -87,9 +87,9 @@ int main(int argc, char** argv){
         perror("Server: listen");
         exit(EXIT_FAILURE);
     }
-
+    socklen_t addr_size = sizeof(server);
     while(1){
-        if(client_socket = accept(server_socket, (struct sockaddr *) &server, sizeof(server)) > -1){
+        if((client_socket = accept(server_socket, (struct sockaddr *) &server, &addr_size)) > -1){
             // make a thread that parses the command
             pthread_t ctid;
             pthread_create(&ctid, NULL, &process_command, client_socket);
@@ -118,7 +118,7 @@ struct Reply create_room(const char * room_name){
     server_socket.sin_addr.s_addr = INADDR_ANY;
     server_socket.sin_port = htons(++port_number);
     
-    if(sockfd = socket(AF_INET, SOCK_STREAM, 0) < 0){
+    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         reply.status = FAILURE_UNKNOWN;
         perror("server: create the socket");
         return reply;
@@ -194,7 +194,7 @@ struct Reply room_list(){
     int i;
     for(i = 0; i < num_rooms; ++i){
         strcat(room_list,room_db[i].name);
-        strcat(room_db,",");
+        strcat(room_list,",");
     }
 
     strcpy(reply.list_room,room_list);
@@ -224,6 +224,8 @@ void process_command(const int client_port){
                 reply = join_room(cmd.chat_name);
             case LIST:
                 reply = room_list();
+            case UNKNOWN:
+                reply.status = FAILURE_UNKNOWN;
         }
         send(client_port, &reply, sizeof(reply), 0);
         if(cmd.type == JOIN){ // no more commands after join
@@ -251,8 +253,9 @@ void client_worker(chat_room_t *room){
         perror("Server: listen");
     }
     int client_socket;
+    socklen_t addr_size =  sizeof(room->address);
     while(1){
-        if((client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, sizeof(room->address))) > -1){
+        if((client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, &addr_size)) > -1){
             // add the client socket to the db in the chat room
             room->slave_socket[room->num_members + 1] = client_socket; // 0 is master socket
             room->num_members = room->num_members + 1;
