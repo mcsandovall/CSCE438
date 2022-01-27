@@ -45,8 +45,7 @@ enum COMMAND_TYPE_PREFIX
     DELETE,
     JOIN,
     LIST,
-    UNKNOWN,
-    TERMINATE
+    UNKNOWN
 };
 
 typedef struct

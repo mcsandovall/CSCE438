@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/time.h>
-
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,7 +254,8 @@ void process_chatmode(const char* host, const int port)
 
 	//start a thread to handle the chat recieving while the user inputs a message
 	pthread_t recv_thread;
-	pthread_create(&recv_thread, NULL, (void *) recv_message, NULL);
+	pthread_create(&recv_thread, NULL, &recv_message, 123);
+
 	char msg[MAX_DATA];
 
 	while(!terminate_chat){
