@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -244,7 +245,7 @@ void process_chatmode(const char* host, const int port)
 	// the server.
 	// ------------------------------------------------------------
 	char user_msg[MAX_DATA];
-	get_message(&user_msg, MAX_DATA); // get message from the user
+	get_message((char *) &user_msg, MAX_DATA); // get message from the user
 	
 	// send a message from the user to the server
 	if(send(sockfd, user_msg, MAX_DATA, 0) < 0){
@@ -254,13 +255,13 @@ void process_chatmode(const char* host, const int port)
 
 	//start a thread to handle the chat recieving while the user inputs a message
 	pthread_t recv_thread;
-	pthread_create(&recv_thread, NULL, &recv_message, 123);
+	pthread_create(&recv_thread, NULL,(void *) &recv_message, &sockfd);
 
 	char msg[MAX_DATA];
 
 	while(!terminate_chat){
 		// recieve input form the user
-		get_message(&msg, MAX_DATA);
+		get_message((char *) &msg, MAX_DATA);
 
 		// send the message
 		send(sockfd, &msg, sizeof(msg), 0);
@@ -279,10 +280,6 @@ void process_chatmode(const char* host, const int port)
     //    Don't have to worry about this situation, and you can 
     //    terminate the client program by pressing CTRL-C (SIGINT)
 	// ------------------------------------------------------------
-
-	// send a last message to the program that the client has been terminated
-	strcpy(msg,"/TERMINATED");
-	send(sockfd,&msg,sizeof(msg),0);
 }
 
 void terminate_handler(int sig){
@@ -292,6 +289,6 @@ void terminate_handler(int sig){
 void recv_message(const int sockfd){
 	char msg[MAX_DATA];
 	while(recv(sockfd,msg,MAX_DATA,0) > 0){
-		display_message(&msg);
+		display_message((char *) &msg);
 	}
 }
