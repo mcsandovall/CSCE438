@@ -65,7 +65,8 @@ int port_number;
 pthread_mutex_t mtx;
 
 int main(int argc, char** argv){
-    
+    printf("=========== CHAT ROOM SERVER ================\n");
+    printf("=============================================\n");
     port_number = atoi(argv[1]);
     int server_socket, client_socket;
     struct sockaddr_in server, client;
@@ -88,6 +89,7 @@ int main(int argc, char** argv){
         exit(EXIT_FAILURE);
     }
     socklen_t addr_size = sizeof(server);
+    printf("Strarting communication with clients \n");
     while(1){
         if((client_socket = accept(server_socket, (struct sockaddr *) &server, &addr_size)) > -1){
             // make a thread that parses the command
