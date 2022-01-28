@@ -73,8 +73,7 @@ typedef struct{
 
 typedef struct {
     struct sockaddr_in address;
-    int socket;
-    int port_number;
+    int sockfd;
     int uid;
 } client_t;
 

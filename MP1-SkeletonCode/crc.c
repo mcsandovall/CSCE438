@@ -34,11 +34,12 @@ int main(int argc, char** argv)
 
     display_title();
 	//signal(SIGINT, terminate_handler);
+    int sockfd = connect_to(argv[1], atoi(argv[2]));
     
-	while (!terminate_chat) {
+	while (1) {
 	
-		int sockfd = connect_to(argv[1], atoi(argv[2]));
-    
+		
+ 
 		char command[MAX_DATA];
         get_command(command, MAX_DATA);
 
@@ -48,10 +49,10 @@ int main(int argc, char** argv)
 		touppercase(command, strlen(command) - 1);
 		if (strncmp(command, "JOIN", 4) == 0) {
 			printf("Now you are in the chatmode\n");
+			close(sockfd);
 			process_chatmode(argv[1], reply.port);
 		}
-	
-		close(sockfd);
+		
     }
 
     return 0;

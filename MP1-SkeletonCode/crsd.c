@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <signal.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,7 +52,7 @@ struct Reply join_room(const char * room_name);
 struct Reply delete_room(const char * room_name);
 struct Reply room_list();
 chat_room_t * search(const char * room_name);
-void process_command(const int * client_port);
+void process_command(void * arg);
 void send_message(const chat_room_t * chat_room, const char * message);
 void client_worker(chat_room_t * room);
 void listen_worker(chat_room_t * room);
@@ -74,6 +75,10 @@ int main(int argc, char** argv){
     struct sockaddr_in address;
     int opt = 1;
     int addrlen = sizeof(address);
+    pthread_t tid;
+    
+    signal(SIGPIPE, SIG_IGN);
+    
     
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -111,16 +116,12 @@ int main(int argc, char** argv){
             exit(EXIT_FAILURE);
         }
         
-        if(num_clients == MAX_MEMBER){
-            close(new_socket);
-            continue;
-        }
-        
-        pthread_t tid;
-        pthread_create(&tid, NULL, (void *) &process_command, &new_socket);
-        client_threads[num_clients] = tid;
-        ++num_clients;
-        
+        client_t * cli = (client_t *) malloc(sizeof(client_t));
+        cli->address = address;
+        cli->sockfd = new_socket;
+       
+        // process the command for this client
+        pthread_create(&tid, NULL, (void *) &process_command, (void *) cli);
     }
     return 0;
 }
@@ -283,21 +284,24 @@ chat_room_t * search(const char * room_name){
  * 
  * @parameter client_port               socket the client established for communication
 */
-void process_command(const int * client_port){
-    printf("%d \n", client_port);
+void process_command(void * arg){
+    
+    client_t * cli = (client_t *) arg;
+    printf("clientfd: %d \n",cli->sockfd);
     Command cmd;
     struct Reply reply;
     int valread;
+    
     while(1){
-       valread = recv(*client_port, &cmd, sizeof(cmd), 0);
-       if(valread < 0){
+        valread = recv(cli->sockfd, &cmd, sizeof(cmd), 0);
+        if(valread < 0){
            perror("Client aborted abnormally");
-           close(*client_port);
-           break;
-       }
+           close(cli->sockfd);
+        }
        
        if(valread == 0){
-           break;
+           perror("client stopped listening...");
+           close(cli->sockfd);
        }
        
        switch(cmd.type){
@@ -317,30 +321,8 @@ void process_command(const int * client_port){
                 reply.status = FAILURE_UNKNOWN;
                 break;
         }
-        send(*client_port, &reply, sizeof(reply), 0);
-        if(cmd.type == JOIN){
-            break;
-        }
+        send(cli->sockfd, &reply, sizeof(reply), 0);
     }
-    // while(recv(client_port, &cmd, sizeof(cmd), 0) >= 0){
-        
-    //     switch(cmd.type){
-    //         case CREATE:
-    //             reply = create_room(cmd.chat_name);
-    //         case DELETE:
-    //             reply = delete_room(cmd.chat_name);
-    //         case JOIN:
-    //             reply = join_room(cmd.chat_name);
-    //         case LIST:
-    //             reply = room_list();
-    //         case UNKNOWN:
-    //             reply.status = FAILURE_UNKNOWN;
-    //     }
-    //     send(client_port, &reply, sizeof(reply), 0);
-    //     if(cmd.type == JOIN){ // no more commands after join
-    //         break;
-    //     }
-    // }
 }
 
 /**
