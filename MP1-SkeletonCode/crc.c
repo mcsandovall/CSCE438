@@ -19,10 +19,11 @@ int connect_to(const char *host, const int port);
 struct Reply process_command(const int sockfd, char* command);
 void process_chatmode(const char* host, const int port);
 void terminate_handler(int sig); // this is the functin that will handle the process being terminated
-void recv_message(const int sockfd); // function to recieve messages and display them to the terminal
+void recv_message(void * arg); // function to recieve messages and display them to the terminal
 int terminate_chat = 0; // this flag allows to run chat mode until CNTR_C
 int ip_converter(const char * host, char * ip);
 
+pthread_t tid;
 
 int main(int argc, char** argv) 
 {
@@ -33,6 +34,7 @@ int main(int argc, char** argv)
 	}
 
     display_title();
+
 	//signal(SIGINT, terminate_handler);
     int sockfd = connect_to(argv[1], atoi(argv[2]));
     
@@ -241,7 +243,9 @@ void process_chatmode(const char* host, const int port)
 	// You may re-use the function "connect_to".
 	// ------------------------------------------------------------
 	int sockfd =  connect_to(host, port);
-	if(sockfd < 0){return;} // error handling
+	if(sockfd < 0){
+		perror("chat connection");
+	}
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// Once the client have been connected to the server, we need
@@ -258,12 +262,10 @@ void process_chatmode(const char* host, const int port)
 		return;
 	}
 
-	//start a thread to handle the chat recieving while the user inputs a message
-	pthread_t recv_thread;
-	pthread_create(&recv_thread, NULL,(void *) &recv_message, &sockfd);
+	pthread_create(&tid, NULL,(void *) &recv_message, &sockfd);
 
 	char msg[MAX_DATA];
-
+	
 	while(!terminate_chat){
 		// recieve input form the user
 		get_message((char *) &msg, MAX_DATA);
@@ -291,9 +293,11 @@ void terminate_handler(int sig){
 	terminate_chat = 1;
 }
 
-void recv_message(const int sockfd){
+void recv_message(void * arg){
+	int * sockfd = (int *) arg;
 	char msg[MAX_DATA];
-	while(recv(sockfd,msg,MAX_DATA,0) > 0){
+	
+	while(recv(*sockfd,msg,MAX_DATA,0) > 0){
 		display_message((char *) &msg);
 	}
 }

@@ -225,7 +225,7 @@ struct Reply delete_room(const char * room_name){
     }
     
     // send a warning message to everyone
-    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE");
+    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE \n");
     
     // close the master socket
     close(room->slave_socket[0]);
@@ -346,7 +346,6 @@ void send_message(const chat_room_t * chat_room, const char * message){
     // send a message to all clients in the chat room
     int i;
     for(i = 1; i <= chat_room->num_members; ++i){
-        printf("%d \n", chat_room->slave_socket[i]);
         if(send(chat_room->slave_socket[i], message, sizeof(message), 0) < 0){
             perror("Message: can not be sent");
         }
@@ -384,7 +383,6 @@ void client_worker(void * arg){
         
         printf("%s: client connected, clients: %d \n", room->name, room->num_members);
         
-        printf("%d \n", client_socket);
         pthread_create(&tid, NULL, (void *) &listen_worker, room);
     }
 }
