@@ -85,12 +85,17 @@ int connect_to(const char *host, const int port)
 		perror("Error creating socket");
 		return sockfd;
 	}
-	char ip[MAX_DATA];
-	ip_converter((char *) &host,(char *) &ip);
 	struct sockaddr_in server;
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = htonl(ip);
 	server.sin_port = htons(port);
+	
+	char ip[MAX_DATA];
+	ip_converter(host,&ip);
+	if(inet_pton(AF_INET, "127.0.0.1", &server.sin_addr)<=0) 
+    {
+        printf("\nInvalid address/ Address not supported \n");
+        return -1;
+    }
 	if (connect(sockfd, (struct sockaddr*) &server, sizeof(server)) < 0){
 		perror("Error connecting to server");
 		return -1;
