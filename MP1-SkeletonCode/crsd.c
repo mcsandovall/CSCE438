@@ -57,11 +57,13 @@ void client_worker(chat_room_t * room);
 void listen_worker(chat_room_t * room);
 
 
-// Database of rooms 
+// Database of rooms
 chat_room_t room_db[MAX_ROOM];
 int num_rooms = 0;
 int port_number;
 pthread_mutex_t mtx;
+int num_clients = 0;
+pthread_t client_threads[MAX_MEMBER];
 
 int main(int argc, char** argv){
     printf("=========== CHAT ROOM SERVER ================\n");
@@ -108,8 +110,16 @@ int main(int argc, char** argv){
             perror("accept");
             exit(EXIT_FAILURE);
         }
+        
+        if(num_clients == MAX_MEMBER){
+            close(new_socket);
+            continue;
+        }
+        
         pthread_t tid;
         pthread_create(&tid, NULL, (void *) &process_command, &new_socket);
+        client_threads[num_clients] = tid;
+        ++num_clients;
         
     }
     return 0;
@@ -186,6 +196,8 @@ struct Reply join_room(const char * room_name){
         reply.status = FAILURE_NOT_EXISTS;
         return reply;
     }
+    
+    room->num_members++;
     
     // return the port number and the amount of people in the chat room
     reply.port = room->port_number;
@@ -272,6 +284,7 @@ chat_room_t * search(const char * room_name){
  * @parameter client_port               socket the client established for communication
 */
 void process_command(const int * client_port){
+    printf("%d \n", client_port);
     Command cmd;
     struct Reply reply;
     int valread;
