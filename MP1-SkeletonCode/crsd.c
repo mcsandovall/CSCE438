@@ -59,7 +59,7 @@ void listen_worker(chat_room_t * room);
 
 
 // Database of rooms
-chat_room_t room_db[MAX_ROOM];
+chat_room_t * room_db[MAX_ROOM];
 int num_rooms = 0;
 int port_number;
 pthread_mutex_t mtx;
@@ -165,18 +165,18 @@ struct Reply create_room(const char * room_name){
     }
     
     // create a new entry in the db
-    chat_room_t new_room;
-    new_room.port_number = port_number;
-    new_room.num_members = 0;
-    strcpy(new_room.name,room_name);
-    new_room.slave_socket[0] = sockfd;
-    new_room.address = server_socket;
+    chat_room_t * new_room = (chat_room_t *)malloc(sizeof(chat_room_t));
+    new_room->port_number = port_number;
+    new_room->num_members = 0;
+    strcpy(new_room->name,room_name);
+    new_room->slave_socket[0] = sockfd;
+    new_room->address = server_socket;
     room_db[num_rooms] = new_room;
     ++num_rooms;
     
     // make a thread to start listening and accepting conections for the clients
     pthread_t tid;
-    pthread_create(&tid, NULL, (void *) &client_worker, &new_room);
+    pthread_create(&tid, NULL, (void *) &client_worker, new_room);
     
     return reply;
 }
@@ -248,7 +248,7 @@ struct Reply room_list(){
 
     int i;
     for(i = 0; i < num_rooms; ++i){
-        strcat(room_list,room_db[i].name);
+        strcat(room_list,room_db[i]->name);
         strcat(room_list,",");
     }
 
@@ -271,8 +271,10 @@ chat_room_t * search(const char * room_name){
     
     int i;
     for(i = 0; i < num_rooms; ++i){
-        if(strncmp(room_db[i].name, room_name, strlen(room_name)) == 0){
-            return &room_db[i]; 
+        if(room_db[i]){
+            if(strncmp(room_db[i]->name, room_name, strlen(room_name)) == 0){
+            return room_db[i]; 
+            }
         }
     }
     return NULL;
