@@ -51,11 +51,10 @@ struct Reply join_room(const char * room_name);
 struct Reply delete_room(const char * room_name);
 struct Reply room_list();
 chat_room_t * search(const char * room_name);
-void process_command(const int client_port);
+void process_command(const int * client_port);
 void send_message(const chat_room_t * chat_room, const char * message);
 void client_worker(chat_room_t * room);
 void listen_worker(chat_room_t * room);
-
 
 
 // Database of rooms 
@@ -67,36 +66,51 @@ pthread_mutex_t mtx;
 int main(int argc, char** argv){
     printf("=========== CHAT ROOM SERVER ================\n");
     printf("=============================================\n");
+    
     port_number = atoi(argv[1]);
-    int server_socket, client_socket;
-    struct sockaddr_in server, client;
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(port_number);
-
-    if((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        perror("Server: socket");
+    int server_fd, new_socket, valread;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    {
+        perror("socket failed");
         exit(EXIT_FAILURE);
     }
-
-    if(bind(server_socket, (struct sockaddr *) &server, sizeof(server)) < 0){
-        perror("Server: bind");
+    
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
+    {
+        perror("setsockopt");
         exit(EXIT_FAILURE);
     }
-
-    if(listen(server_socket,MAX_MEMBER) < 0){
-        perror("Server: listen");
+    
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons( port_number );
+    
+    // Forcefully attaching socket to the port 8080
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0)
+    {
+        perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    socklen_t addr_size = sizeof(server);
-    printf("Strarting communication with clients \n");
+    
+    if (listen(server_fd, 3) < 0)
+    {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+    
     while(1){
-        if((client_socket = accept(server_socket, (struct sockaddr *) &server, &addr_size)) > -1){
-            // make a thread that parses the command for that client
-            pthread_t ctid;
-            pthread_create(&ctid, NULL, (void *) &process_command, &client_socket);
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
+        {
+            perror("accept");
+            exit(EXIT_FAILURE);
         }
-        perror("server: accpeting client");
+        pthread_t tid;
+        pthread_create(&tid, NULL, (void *) &process_command, &new_socket);
+        
     }
     return 0;
 }
@@ -237,6 +251,11 @@ struct Reply room_list(){
  * @return chat_room_t *              NULL if the room was not found, else return a pointer to the room
 */
 chat_room_t * search(const char * room_name){
+    
+    if(!num_rooms){
+        return NULL;
+    }
+    
     int i;
     for(i = 0; i < num_rooms; ++i){
         if(strncmp(room_db[i].name, room_name, strlen(room_name)) == 0){
@@ -252,27 +271,63 @@ chat_room_t * search(const char * room_name){
  * 
  * @parameter client_port               socket the client established for communication
 */
-void process_command(const int client_port){
+void process_command(const int * client_port){
     Command cmd;
     struct Reply reply;
-    while(recv(client_port, &cmd, sizeof(cmd), 0) > 0){
-        switch(cmd.type){
+    int valread;
+    while(1){
+       valread = recv(*client_port, &cmd, sizeof(cmd), 0);
+       if(valread < 0){
+           perror("Client aborted abnormally");
+           close(*client_port);
+           break;
+       }
+       
+       if(valread == 0){
+           break;
+       }
+       
+       switch(cmd.type){
             case CREATE:
                 reply = create_room(cmd.chat_name);
+                break;
             case DELETE:
                 reply = delete_room(cmd.chat_name);
+                break;
             case JOIN:
                 reply = join_room(cmd.chat_name);
+                break;
             case LIST:
                 reply = room_list();
+                break;
             case UNKNOWN:
                 reply.status = FAILURE_UNKNOWN;
+                break;
         }
-        send(client_port, &reply, sizeof(reply), 0);
-        if(cmd.type == JOIN){ // no more commands after join
+        send(*client_port, &reply, sizeof(reply), 0);
+        if(cmd.type == JOIN){
             break;
         }
     }
+    // while(recv(client_port, &cmd, sizeof(cmd), 0) >= 0){
+        
+    //     switch(cmd.type){
+    //         case CREATE:
+    //             reply = create_room(cmd.chat_name);
+    //         case DELETE:
+    //             reply = delete_room(cmd.chat_name);
+    //         case JOIN:
+    //             reply = join_room(cmd.chat_name);
+    //         case LIST:
+    //             reply = room_list();
+    //         case UNKNOWN:
+    //             reply.status = FAILURE_UNKNOWN;
+    //     }
+    //     send(client_port, &reply, sizeof(reply), 0);
+    //     if(cmd.type == JOIN){ // no more commands after join
+    //         break;
+    //     }
+    // }
 }
 
 /**

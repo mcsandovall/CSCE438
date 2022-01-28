@@ -33,9 +33,9 @@ int main(int argc, char** argv)
 	}
 
     display_title();
-	signal(SIGINT, terminate_handler);
+	//signal(SIGINT, terminate_handler);
     
-	while (1) {
+	while (!terminate_chat) {
 	
 		int sockfd = connect_to(argv[1], atoi(argv[2]));
     
@@ -91,7 +91,7 @@ int connect_to(const char *host, const int port)
 	
 	char ip[MAX_DATA];
 	ip_converter(host,&ip);
-	if(inet_pton(AF_INET, "127.0.0.1", &server.sin_addr)<=0) 
+	if(inet_pton(AF_INET, &ip, &server.sin_addr)<=0) 
     {
         printf("\nInvalid address/ Address not supported \n");
         return -1;
@@ -151,7 +151,6 @@ struct Reply process_command(const int sockfd, char* command)
 	}else if (strncmp(command, "LIST", 4) == 0){
 		cmd.type = LIST;
 	}else{
-		// invalid command
 		return reply;
 	}
 	
@@ -161,7 +160,7 @@ struct Reply process_command(const int sockfd, char* command)
 		for(i =0; command[i] ; ++i){
 			if(command[i] == ' '){ // check for the space to split the command and the name
 				char buff[strlen(command)-i];
-				memcpy(buff, &command[i], strlen(command));
+				memcpy(buff, &command[i+1], strlen(command));
 				strcpy(cmd.chat_name, buff);
 				break;
 			}
@@ -180,11 +179,7 @@ struct Reply process_command(const int sockfd, char* command)
 	}
 
 	// recieve reply from the server
-	if(recv(sockfd, &reply, sizeof(struct Reply), 0) < 0){
-		perror("Error: Invalid response from Server");
-		return reply;
-	}
-
+	read(sockfd, &reply, sizeof(reply));
 	// ------------------------------------------------------------
 	// GUIDE 3:
 	// Then, you should create a variable of Reply structure
