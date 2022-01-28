@@ -168,7 +168,10 @@ struct Reply create_room(const char * room_name){
     new_room->slave_socket[0] = sockfd;
     new_room->address = server_socket;
     room_db[num_rooms] = new_room;
+    
+    pthread_mutex_lock(&mtx);
     ++num_rooms;
+    pthread_mutex_unlock(&mtx);
     
     // make a thread to start listening and accepting conections for the clients
     pthread_t tid;
@@ -193,8 +196,9 @@ struct Reply join_room(const char * room_name){
         reply.status = FAILURE_NOT_EXISTS;
         return reply;
     }
-    
+    pthread_mutex_lock(&mtx);
     room->num_members++;
+    pthread_mutex_unlock(&mtx);
     
     // return the port number and the amount of people in the chat room
     reply.port = room->port_number;
@@ -357,20 +361,16 @@ void client_worker(chat_room_t *room){
     if(listen(room->slave_socket[0], MAX_MEMBER) < 0){
         perror("Server: listen");
     }
+    
     int client_socket;
     socklen_t addr_size =  sizeof(room->address);
+    pthread_t tid;
+    
     while(1){
-        if((client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, &addr_size)) > -1){
-            // add the client socket to the db in the chat room
-            pthread_mutex_lock(&mtx);
-            room->slave_socket[room->num_members + 1] = client_socket; // 0 is master socket
-            room->num_members = room->num_members + 1;
-            pthread_mutex_unlock(&mtx);
-            
-            // make a thread that listens to the client and send message to the room
-            pthread_t tid;
-            pthread_create(&tid, NULL, (void *) &listen_worker, room);
-        }
+        
+        client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, &addr_size);
+        
+        pthread_create(&tid, NULL, (void *) &listen_worker, room);
     }
 }
 
@@ -382,8 +382,11 @@ void client_worker(chat_room_t *room){
 */
 void listen_worker(chat_room_t * room){
     char buff[MAX_DATA];
-    int client_id = room->num_members;
-    while(recv(room->slave_socket[client_id + 1], &buff, MAX_DATA, 0) > -1){
+    int client_socket = room->slave_socket[room->num_members];
+    
+    while(recv(client_socket, &buff, MAX_DATA, 0) > 0){
         send_message(room, buff);
     }
+    
+    close(client_socket);
 }
