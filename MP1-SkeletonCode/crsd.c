@@ -54,8 +54,8 @@ struct Reply room_list();
 chat_room_t * search(const char * room_name);
 void process_command(void * arg);
 void send_message(const chat_room_t * chat_room, const char * message);
-void client_worker(chat_room_t * room);
-void listen_worker(chat_room_t * room);
+void client_worker(void * arg);
+void listen_worker(void * arg);
 
 
 // Database of rooms
@@ -77,7 +77,7 @@ int main(int argc, char** argv){
     int addrlen = sizeof(address);
     pthread_t tid;
     
-    signal(SIGPIPE, SIG_IGN);
+    //signal(SIGPIPE, SIG_IGN);
     
     
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
@@ -117,6 +117,8 @@ int main(int argc, char** argv){
         }
        
         // process the command for this client
+        ++num_clients;
+        printf("Current number of clients connected: %d \n", num_clients);
         pthread_create(&tid, NULL, (void *) &process_command, (void *) &new_socket);
     }
     return 0;
@@ -196,9 +198,6 @@ struct Reply join_room(const char * room_name){
         reply.status = FAILURE_NOT_EXISTS;
         return reply;
     }
-    pthread_mutex_lock(&mtx);
-    room->num_members++;
-    pthread_mutex_unlock(&mtx);
     
     // return the port number and the amount of people in the chat room
     reply.port = room->port_number;
@@ -289,7 +288,6 @@ chat_room_t * search(const char * room_name){
 void process_command(void * arg){
     
     int client_socket = *((int *) arg);
-    printf("clientfd: %d \n",client_socket);
     Command cmd;
     struct Reply reply;
     int valread;
@@ -299,6 +297,7 @@ void process_command(void * arg){
         if(valread < 0){
            perror("Client aborted abnormally");
            close(client_socket);
+           --num_clients;
            break;
         }
        
@@ -311,6 +310,7 @@ void process_command(void * arg){
        switch(cmd.type){
             case CREATE:
                 reply = create_room(cmd.chat_name);
+                printf("Number of chat rooms: %d \n", num_rooms);
                 break;
             case DELETE:
                 reply = delete_room(cmd.chat_name);
@@ -326,6 +326,10 @@ void process_command(void * arg){
                 break;
         }
         send(client_socket, &reply, sizeof(reply), 0);
+        if(cmd.type == JOIN){
+            close(client_socket);
+            break;
+        }
     }
 }
 
@@ -342,6 +346,7 @@ void send_message(const chat_room_t * chat_room, const char * message){
     // send a message to all clients in the chat room
     int i;
     for(i = 1; i <= chat_room->num_members; ++i){
+        printf("%d \n", chat_room->slave_socket[i]);
         if(send(chat_room->slave_socket[i], message, sizeof(message), 0) < 0){
             perror("Message: can not be sent");
         }
@@ -355,8 +360,9 @@ void send_message(const chat_room_t * chat_room, const char * message){
  * 
  * @parameter room          pointer to a chat room to in which to add new memebers to 
 */
-void client_worker(chat_room_t *room){
+void client_worker(void * arg){
     
+    chat_room_t * room = (chat_room_t *) arg;
     // listen with the master socket, and create a new sockfd for every client that 
     if(listen(room->slave_socket[0], MAX_MEMBER) < 0){
         perror("Server: listen");
@@ -366,10 +372,19 @@ void client_worker(chat_room_t *room){
     socklen_t addr_size =  sizeof(room->address);
     pthread_t tid;
     
+    printf("Chat room %s started, waiting for connections... \n", room->name);
+    
     while(1){
         
         client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, &addr_size);
         
+        pthread_mutex_lock(&mtx);
+        room->slave_socket[++room->num_members] = client_socket;
+        pthread_mutex_unlock(&mtx);
+        
+        printf("%s: client connected, clients: %d \n", room->name, room->num_members);
+        
+        printf("%d \n", client_socket);
         pthread_create(&tid, NULL, (void *) &listen_worker, room);
     }
 }
@@ -380,7 +395,9 @@ void client_worker(chat_room_t *room){
  * 
  * @parameter room              room in whcih all communication occurs
 */
-void listen_worker(chat_room_t * room){
+void listen_worker(void * arg){
+    
+    chat_room_t * room = (chat_room_t *) arg;
     char buff[MAX_DATA];
     int client_socket = room->slave_socket[room->num_members];
     
