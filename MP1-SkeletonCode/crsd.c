@@ -115,13 +115,9 @@ int main(int argc, char** argv){
             perror("accept");
             exit(EXIT_FAILURE);
         }
-        
-        client_t * cli = (client_t *) malloc(sizeof(client_t));
-        cli->address = address;
-        cli->sockfd = new_socket;
        
         // process the command for this client
-        pthread_create(&tid, NULL, (void *) &process_command, (void *) cli);
+        pthread_create(&tid, NULL, (void *) &process_command, (void *) &new_socket);
     }
     return 0;
 }
@@ -288,22 +284,24 @@ chat_room_t * search(const char * room_name){
 */
 void process_command(void * arg){
     
-    client_t * cli = (client_t *) arg;
-    printf("clientfd: %d \n",cli->sockfd);
+    int client_socket = *((int *) arg);
+    printf("clientfd: %d \n",client_socket);
     Command cmd;
     struct Reply reply;
     int valread;
     
     while(1){
-        valread = recv(cli->sockfd, &cmd, sizeof(cmd), 0);
+        valread = recv(client_socket, &cmd, sizeof(cmd), 0);
         if(valread < 0){
            perror("Client aborted abnormally");
-           close(cli->sockfd);
+           close(client_socket);
+           break;
         }
        
        if(valread == 0){
            perror("client stopped listening...");
-           close(cli->sockfd);
+           close(client_socket);
+           break;
        }
        
        switch(cmd.type){
@@ -323,7 +321,7 @@ void process_command(void * arg){
                 reply.status = FAILURE_UNKNOWN;
                 break;
         }
-        send(cli->sockfd, &reply, sizeof(reply), 0);
+        send(client_socket, &reply, sizeof(reply), 0);
     }
 }
 
