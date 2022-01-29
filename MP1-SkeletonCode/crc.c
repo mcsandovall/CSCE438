@@ -254,7 +254,7 @@ void process_chatmode(const char* host, const int port)
 	// the server.
 	// ------------------------------------------------------------
 	char user_msg[MAX_DATA];
-	get_message((char *) &user_msg, MAX_DATA); // get message from the user
+	get_message(user_msg, MAX_DATA); // get message from the user
 	
 	// send a message from the user to the server
 	if(send(sockfd, user_msg, MAX_DATA, 0) < 0){
@@ -296,9 +296,14 @@ void terminate_handler(int sig){
 void recv_message(void * arg){
 	int * sockfd = (int *) arg;
 	char msg[MAX_DATA];
-	
-	while(recv(*sockfd,msg,MAX_DATA,0) > 0){
+	int read;
+	while(1){
+		read = recv(*sockfd,msg,MAX_DATA,0);
+		if(read <= 0){
+			break;
+		}
 		display_message((char *) &msg);
+		fflush(stdout);
 	}
 }
 

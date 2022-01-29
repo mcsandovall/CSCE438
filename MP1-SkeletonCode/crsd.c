@@ -10,40 +10,6 @@
 #include <string.h>
 #include "interface.h"
 
-
-/*
-Instructions for the MP
------
-Listen on a well-known port to accept CREATE, DELETE, or JOIN re-
-quests from Chat clients.
------
-For a CREATE request, check whether the given chat room exists al-
-ready. If not, create a new master socket (make sure the port num-
-ber is not usedr) Create an entry for the new chat room in the local
-database, and store the name and the port number of the new chat
-room. Inform the client about the result of the command.
------
-For a JOIN request, check whether the chat room exists. If it does,
-return the port number of the master socket of that chat room and
-the current number members in the chat room. The client will then
-connect to the chat room through that port.
------
-For a DELETE request, check whether the given chat room exists. If
-it does, send a warning message (e.g., chat room being deleted,
-shutting down connection...) to all connected clients before ter-
-minating their connections, closing the master socket, and deleting the
-entry. Inform the client about the result.
------
-Incoming chat messages are handled on slave sockets that are derived
-from the chat-room specific master socket. Whenever a chat message
-comes in, forward that message to all clients that are part of the chat
-room.
------
-Clients leave the chat room by (unceremoniously) terminating the con-
-nection to the server. It is up to the server to handle this and manage
-the chat room membership accordingly.
-*/
-
 /**
  * Functions for the server to talk with the client
 */
@@ -53,7 +19,7 @@ struct Reply delete_room(const char * room_name);
 struct Reply room_list();
 chat_room_t * search(const char * room_name);
 void process_command(void * arg);
-void send_message(const chat_room_t * chat_room, const char * message);
+void send_message(const chat_room_t * chat_room, const char * message, const int client_id);
 void client_worker(void * arg);
 void listen_worker(void * arg);
 
@@ -225,10 +191,15 @@ struct Reply delete_room(const char * room_name){
     }
     
     // send a warning message to everyone
-    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE \n");
+    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE \n", 0);
     
-    // close the master socket
-    close(room->slave_socket[0]);
+    // close all the connection with the clients for that room
+    int i;
+    for(i = 0; i < room->num_members;++i){
+        close(room->slave_socket[i]);
+    }
+    
+    // delete the instance of that room in memory
     return reply;
 }
 
@@ -341,13 +312,18 @@ void process_command(void * arg){
  * @parameter message               user defined message to be send to users in chat room
  * 
 */
-void send_message(const chat_room_t * chat_room, const char * message){
+void send_message(const chat_room_t * chat_room, const char * message, const int client_id){
+    
     pthread_mutex_lock(&mtx);
     // send a message to all clients in the chat room
     int i;
     for(i = 1; i <= chat_room->num_members; ++i){
-        if(send(chat_room->slave_socket[i], message, sizeof(message), 0) < 0){
+        if(i == client_id){
+            continue;
+        }else{
+            if(send(chat_room->slave_socket[i], message, MAX_DATA, 0) < 0){
             perror("Message: can not be sent");
+            }
         }
     }
     pthread_mutex_unlock(&mtx);
@@ -397,10 +373,15 @@ void listen_worker(void * arg){
     
     chat_room_t * room = (chat_room_t *) arg;
     char buff[MAX_DATA];
+    int client_id = room->num_members; // make the exception in the for loop
     int client_socket = room->slave_socket[room->num_members];
-    
-    while(recv(client_socket, &buff, MAX_DATA, 0) > 0){
-        send_message(room, buff);
+    int read;
+    while(1){
+        read = recv(client_socket, &buff, MAX_DATA, 0);
+        if(read <= 0){
+            break;
+        }
+        send_message(room, buff, client_id);
     }
     
     close(client_socket);

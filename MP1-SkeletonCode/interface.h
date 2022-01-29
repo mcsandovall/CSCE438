@@ -39,8 +39,7 @@ enum Status
  * Construct a Command struct to handle and parse the commands to the server
 */
 
-enum COMMAND_TYPE_PREFIX 
-{
+enum COMMAND_TYPE_PREFIX {
     CREATE,
     DELETE,
     JOIN,
@@ -65,17 +64,6 @@ typedef struct{
     struct sockaddr_in address;
     int slave_socket[MAX_MEMBER];
 } chat_room_t;
-
-
-/**
- * Client Datastructure 
-*/
-
-typedef struct {
-    struct sockaddr_in address;
-    int sockfd;
-    int uid;
-} client_t;
 
 /* 
  * Reply structure is designed to be used for displaying the
@@ -165,7 +153,7 @@ void get_command(char* comm, const int size)
 void get_message(char* message, const int size)
 {
     fgets(message, size, stdin);
-    message[strlen(message) - 1] = '\0';
+    message[strlen(message) - 1] = '\n'; // this was changed from the original version for improvement on the chat
 }
 
 
