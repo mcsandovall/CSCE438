@@ -93,8 +93,8 @@ int connect_to(const char *host, const int port)
 	server.sin_port = htons(port);
 	
 	char ip[MAX_DATA];
-	ip_converter(host,&ip);
-	if(inet_pton(AF_INET, &ip, &server.sin_addr)<=0) 
+	ip_converter(host,(char *) &ip);
+	if(inet_pton(AF_INET,(char *) &ip, &server.sin_addr)<=0) 
     {
         printf("\nInvalid address/ Address not supported \n");
         return -1;

@@ -28,9 +28,8 @@ void listen_worker(void * arg);
 chat_room_t * room_db[MAX_ROOM];
 int num_rooms = 0;
 int port_number;
-pthread_mutex_t mtx;
+pthread_mutex_t mtx, chtx;
 int num_clients = 0;
-pthread_t client_threads[MAX_MEMBER];
 
 int main(int argc, char** argv){
     printf("=========== CHAT ROOM SERVER ================\n");
@@ -138,6 +137,7 @@ struct Reply create_room(const char * room_name){
     room_db[num_rooms] = new_room;
     
     pthread_mutex_lock(&mtx);
+    new_room->room_number = num_rooms;
     ++num_rooms;
     pthread_mutex_unlock(&mtx);
     
@@ -183,6 +183,7 @@ struct Reply delete_room(const char * room_name){
     struct Reply reply;
     reply.status = SUCCESS;
     
+    pthread_mutex_lock(&mtx);
     // check if the room exist
     chat_room_t * room = search(room_name);
     if(room == NULL){
@@ -195,11 +196,16 @@ struct Reply delete_room(const char * room_name){
     
     // close all the connection with the clients for that room
     int i;
-    for(i = 0; i < room->num_members;++i){
+    for(i = 0; i <= room->num_members;++i){
         close(room->slave_socket[i]);
     }
     
     // delete the instance of that room in memory
+    int num = room->room_number;
+    num_clients -= (room->num_members + 1);
+    free(room_db[num]);
+    room_db[num] = NULL;
+    pthread_mutex_unlock(&mtx);
     return reply;
 }
 
@@ -314,7 +320,7 @@ void process_command(void * arg){
 */
 void send_message(const chat_room_t * chat_room, const char * message, const int client_id){
     
-    pthread_mutex_lock(&mtx);
+    pthread_mutex_lock(&chtx);
     // send a message to all clients in the chat room
     int i;
     for(i = 1; i <= chat_room->num_members; ++i){
@@ -326,7 +332,7 @@ void send_message(const chat_room_t * chat_room, const char * message, const int
             }
         }
     }
-    pthread_mutex_unlock(&mtx);
+    pthread_mutex_unlock(&chtx);
 }
 
 /**
@@ -352,6 +358,9 @@ void client_worker(void * arg){
     while(1){
         
         client_socket = accept(room->slave_socket[0], (struct sockaddr *) &room->address, &addr_size);
+        if(client_socket < 0){
+            break;
+        }
         
         pthread_mutex_lock(&mtx);
         room->slave_socket[++room->num_members] = client_socket;
@@ -375,12 +384,8 @@ void listen_worker(void * arg){
     char buff[MAX_DATA];
     int client_id = room->num_members; // make the exception in the for loop
     int client_socket = room->slave_socket[room->num_members];
-    int read;
-    while(1){
-        read = recv(client_socket, &buff, MAX_DATA, 0);
-        if(read <= 0){
-            break;
-        }
+    
+    while(recv(client_socket, &buff, MAX_DATA, 0) > 0){
         send_message(room, buff, client_id);
     }
     
