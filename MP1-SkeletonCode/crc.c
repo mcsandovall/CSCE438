@@ -253,16 +253,7 @@ void process_chatmode(const char* host, const int port)
 	// At the same time, the client should wait for a message from
 	// the server.
 	// ------------------------------------------------------------
-	char user_msg[MAX_DATA];
-	get_message(user_msg, MAX_DATA); // get message from the user
-	
-	// send a message from the user to the server
-	if(send(sockfd, user_msg, MAX_DATA, 0) < 0){
-		perror("Error: Message can not be sent");
-		return;
-	}
-
-	pthread_create(&tid, NULL,(void *) &recv_message, &sockfd);
+	pthread_create(&tid, NULL,(void *) &recv_message, &sockfd); // create a thread that listens for recieves
 
 	char msg[MAX_DATA];
 	
