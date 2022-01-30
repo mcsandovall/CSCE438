@@ -35,7 +35,7 @@ int main(int argc, char** argv)
 
     display_title();
 
-	//signal(SIGINT, terminate_handler);
+	signal(SIGINT, terminate_handler);
     int sockfd = connect_to(argv[1], atoi(argv[2]));
     
 	while (1) {
@@ -264,6 +264,13 @@ void process_chatmode(const char* host, const int port)
 		// send the message
 		send(sockfd, &msg, sizeof(msg), 0);
 	}	
+	
+	// once the process chat ends finish the connection 
+	close(sockfd);
+	
+	pthread_detach(tid);
+	
+	exit(EXIT_SUCCESS);
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     // 1. To get a message from a user, you should use a function
@@ -281,6 +288,9 @@ void process_chatmode(const char* host, const int port)
 }
 
 void terminate_handler(int sig){
+	if(terminate_chat == 0){
+		exit(EXIT_SUCCESS);
+	}
 	terminate_chat = 1;
 }
 
