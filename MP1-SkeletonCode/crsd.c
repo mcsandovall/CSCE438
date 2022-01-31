@@ -192,7 +192,7 @@ struct Reply delete_room(const char * room_name){
     }
     
     // send a warning message to everyone
-    send_message(room, "WARNING: ROOM IS CLOSING, ALL CONNECTIONS WILL TERMINATE \n", 0);
+    send_message(room, "Warnning: the chatting room is going to be closed... \n", 0);
     
     // close all the connection with the clients for that room
     int i;
@@ -224,8 +224,10 @@ struct Reply room_list(){
 
     int i;
     for(i = 0; i < num_rooms; ++i){
-        strcat(room_list,room_db[i]->name);
-        strcat(room_list,",");
+        if(room_db[i]){
+            strcat(room_list,room_db[i]->name);
+            strcat(room_list,",");
+        }
     }
 
     strcpy(reply.list_room,room_list);
