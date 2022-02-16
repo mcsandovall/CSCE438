@@ -37,6 +37,7 @@ class Client : public IClient
         std::string hostname;
         std::string username;
         std::string port;
+        std::unique_ptr<SNSService::Stub> _stub; // instance of client stub
         
         // You can have an instance of the client stub
         // as a member variable.
@@ -80,8 +81,24 @@ int Client::connectTo()
     // a member variable in your own Client class.
     // Please refer to gRpc tutorial how to create a stub.
 	// ------------------------------------------------------------
-
-    return 1; // return 1 if success, otherwise return -1
+	
+	// create a new stub for the class
+	_stub(grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials()));
+	
+	// create all the needed arguments for the login request
+	ClientContext context;
+	Request request;
+	request.username = this->username;
+	Reply reply;
+	
+	// login with the stud and verify the status
+	Status status = stub_->Login(&context, &request, &reply);
+	
+	if(status.ok()){
+	    return 1; // if success
+	}else{
+	    return -1;
+	}
 }
 
 IReply Client::processCommand(std::string& input)
