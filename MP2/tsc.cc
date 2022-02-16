@@ -1,8 +1,25 @@
+#include <ctime>
+
+#include <google/protobuf/timestamp.pb.h>
+#include <google/protobuf/duration.pb.h>
+
 #include <iostream>
 #include <string>
 #include <unistd.h>
 #include <grpc++/grpc++.h>
+#include <google/protobuf/util/time_util.h>
 #include "client.h"
+
+using google::protobuf::Timestamp;
+using google::protobuf::Duration;
+using grpc::Client;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::Status;
+using csce438::Message;
+using csce438::Reply;
+using csce438::Request;
+using csce438::SNSService;
 
 class Client : public IClient
 {
