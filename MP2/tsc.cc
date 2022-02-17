@@ -197,9 +197,10 @@ IReply Client::processCommand(std::string& input)
                 return Ireply;
             }
             break;
-        case 'T':
-            // for the timeline 
-            break;
+        case 'T': // set everything for timeline mode
+            Ireply.grpc_status = Status::OK;
+            Ireply.comm_status = SUCCESS;
+            return Ireply;
     }
 	// ------------------------------------------------------------
     // HINT: How to set the IReply?
@@ -235,7 +236,7 @@ void Client::processTimeline()
     // for both getting and displaying messages in timeline mode.
     // You should use them as you did in hw1.
 	// ------------------------------------------------------------
-
+    
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     //
