@@ -4,6 +4,7 @@
 #include <google/protobuf/duration.pb.h>
 
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 #include <grpc++/grpc++.h>
@@ -24,6 +25,10 @@ using csce438::Message;
 using csce438::Reply;
 using csce438::Request;
 using csce438::SNSService;
+
+// helper functions for the class
+enum IStatus parse_response(Reply &reply);
+
 
 class Client : public IClient
 {
@@ -121,6 +126,14 @@ IReply Client::processCommand(std::string& input)
 	//
 	// ------------------------------------------------------------
 	
+    std::size_t index = input.find_first_of(" ");
+    std::string cmd, user_name;
+    if(index != std::string::npos){ // there was a space in the command
+        cmd = input.substr(0, index);
+        user_name = input.substr(index+1,(input.length() - index));
+    }else{ // there was no space in the input
+        cmd = input;
+    }
     // ------------------------------------------------------------
 	// GUIDE 2:
 	// Then, you should create a variable of IReply structure
@@ -128,7 +141,36 @@ IReply Client::processCommand(std::string& input)
 	// the result. Finally you can finish this function by returning
     // the IReply.
 	// ------------------------------------------------------------
-    
+	IReply Ireply;
+	// make a new request used for all the cases
+	Request request;
+	Status status;
+    request.set_username(username);
+	ClientContext context;
+	Reply reply;
+	
+    switch(cmd[0]){ // differentiate by the inital letter of the command
+        case 'F': 
+            // set the repeated string to be the user to follow
+            request.add_arguments(user_name);
+            status = _stub->Follow(&context, request, &reply);
+            Ireply.grpc_status = status;
+            if(status.ok()){
+                Ireply.comm_status = parse_response(reply);
+                return Ireply;
+            }else{
+                Ireply.comm_status = parse_response(reply);
+                return Ireply;
+            }
+            break;
+        case 'U':
+            break;
+        case 'L':
+            break;
+        case 'T':
+            break;
+            
+    }
 	// ------------------------------------------------------------
     // HINT: How to set the IReply?
     // Suppose you have "Follow" service method for FOLLOW command,
@@ -174,4 +216,21 @@ void Client::processTimeline()
     // and you can terminate the client program by pressing
     // CTRL-C (SIGINT)
 	// ------------------------------------------------------------
+}
+
+enum IStatus parse_response(Reply& reply){
+    switch(reply.msg()[0]){
+        case 'S':
+            return SUCCESS;
+        case 'A':
+            return FAILURE_ALREADY_EXISTS;
+        case 'N':
+            return FAILURE_NOT_EXISTS;
+        case 'I':
+            return FAILURE_INVALID_USERNAME;
+        case 'F':
+            return FAILURE_INVALID;
+        case 'U':
+            return FAILURE_UNKNOWN;
+    }
 }
