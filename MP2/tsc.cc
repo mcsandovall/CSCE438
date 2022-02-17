@@ -159,17 +159,47 @@ IReply Client::processCommand(std::string& input)
                 Ireply.comm_status = parse_response(reply);
                 return Ireply;
             }else{
-                Ireply.comm_status = parse_response(reply);
+                Ireply.comm_status = FAILURE_UNKNOWN;
                 return Ireply;
             }
             break;
         case 'U':
+            request.add_arguments(user_name);
+            status = _stub->UnFollow(&context, request, &reply);
+            Ireply.grpc_status = status;
+            if(status.ok()){
+                Ireply.comm_status = parse_response(reply);
+                return Ireply;
+            }else{
+                Ireply.comm_status = FAILURE_UNKNOWN;
+                return Ireply;
+            }
             break;
-        case 'L':
+        case 'L': // list
+            // list does not need another agument
+            status = _stub->List(&context, request, &reply);
+            Ireply.grpc_status = status;
+            if(status.ok()){
+                Ireply.comm_status = parse_response(reply);
+                if(Ireply.comm_status == SUCCESS){
+                    // get the list of all users
+                    for(int i = 0; i < reply.all_users().size(); ++i){
+                        Ireply.all_users.push_back(reply.all_users(i));
+                    }
+                    // get the list of following users
+                    for(int i = 0; i < reply.following_users().size(); ++i){
+                        Ireply.following_users.push_back(reply.following_users(i));
+                    }
+                }
+                return IReply;
+            }else{
+                Ireply.comm_status = FAILURE_UNKNOWN;
+                return Ireply;
+            }
             break;
         case 'T':
+            // for the timeline 
             break;
-            
     }
 	// ------------------------------------------------------------
     // HINT: How to set the IReply?
@@ -193,9 +223,7 @@ IReply Client::processCommand(std::string& input)
     // For the command "LIST", you should set both "all_users" and 
     // "following_users" member variable of IReply.
     // ------------------------------------------------------------
-    
-    IReply ire;
-    return ire;
+    return Ireply;
 }
 
 void Client::processTimeline()
