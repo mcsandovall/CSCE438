@@ -10,11 +10,15 @@
 #include <google/protobuf/util/time_util.h>
 #include "client.h"
 
+#include "sns.grpc.pb.h"
+
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
-using grpc::Client;
+using grpc::Channel;
 using grpc::ClientContext;
 using grpc::ClientReader;
+using grpc::ClientReaderWriter;
+using grpc::ClientWriter;
 using grpc::Status;
 using csce438::Message;
 using csce438::Reply;
@@ -82,23 +86,14 @@ int Client::connectTo()
     // Please refer to gRpc tutorial how to create a stub.
 	// ------------------------------------------------------------
 	
-	// create a new stub for the class
-	_stub(grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials()));
+	//create a new cheannel for the stub to connect with
+	_stub = SNSService::NewStub(grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials()));
 	
-	// create all the needed arguments for the login request
-	ClientContext context;
+	// create a new request to login 
 	Request request;
-	request.username = this->username;
-	Reply reply;
+	request.set_username(username);
 	
-	// login with the stud and verify the status
-	Status status = stub_->Login(&context, &request, &reply);
-	
-	if(status.ok()){
-	    return 1; // if success
-	}else{
-	    return -1;
-	}
+	return 1; // if ok -1 if not
 }
 
 IReply Client::processCommand(std::string& input)
