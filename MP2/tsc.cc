@@ -92,8 +92,17 @@ int Client::connectTo()
 	// create a new request to login 
 	Request request;
 	request.set_username(username);
+	ClientContext context;
+	Reply reply;
 	
-	return 1; // if ok -1 if not
+	// send the request to the stub and bring back a status
+	Status status = _stub->Login(&context, request, &reply);
+	
+	if(status.ok()){
+	    return 1;
+	}else{
+	    return -1;
+	}
 }
 
 IReply Client::processCommand(std::string& input)
