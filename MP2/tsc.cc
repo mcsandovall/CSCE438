@@ -237,6 +237,8 @@ void Client::processTimeline()
     // You should use them as you did in hw1.
 	// ------------------------------------------------------------
     
+    // once into timeline mode call the first 20 messages
+    
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     //

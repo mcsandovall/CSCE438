@@ -1,0 +1,13 @@
+[{
+    "username" : "mario",
+    "following_list" : ["tanzir","monse"],
+    "list_followers" : ["monse"]
+},{
+    "username" : "monse",
+    "following_list" : ["mario"],
+    "list_followers" : ["mario"]
+},{
+    "username" : "tanzir",
+    "following_list" : ["mario"],
+    "list_followers" : []
+}]

@@ -28,6 +28,8 @@ using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
 
+#define USER_DIR "all_user_db.txt"
+
 class SNSServiceImpl final : public SNSService::Service {
   
   Status List(ServerContext* context, const Request* request, Reply* reply) override {
@@ -36,6 +38,8 @@ class SNSServiceImpl final : public SNSService::Service {
     // LIST request from the user. Ensure that both the fields
     // all_users & following_users are populated
     // ------------------------------------------------------------
+    
+    // return a list of all users and the list of users that follow each users request
     return Status::OK;
   }
 
@@ -84,8 +88,18 @@ void RunServer(std::string port_no) {
   // port number.
   // ------------------------------------------------------------
   ServerBuilder builder;
+  SNSService service;
   builder.AddListeningPort(port_no, grpc::InsecureServerCredentials());
-  builder.AddRegisterService(&SNSService);
+  builder.AddRegisterService(&service);
+  std::unique_ptr<Server> server(builder.BuildAndStart());
+  std::cout << "Server listening on " << port_no << std::endl;
+  // open the all user database
+  std::fstream file(USER_DIR, std::fstream::out);
+  if(!file.is_open()){
+    // file couldnt be opened
+    perror << "Database could not be opened";
+  }
+  server->Wait();
 }
 
 int main(int argc, char** argv) {
