@@ -104,7 +104,30 @@ class Parser{
         
         bool Finished() { return current_ >= db_.size(); }
         
-        
+        bool TryParseOne(User * usr) {
+            if (failed_ || Finished() || !Match("{")) {
+              return SetFailedAndReturnFalse();
+            }
+            if (!Match(location_) || !Match("{") || !Match(latitude_)) {
+              return SetFailedAndReturnFalse();
+            }
+            size_t name_start = current_;
+            while (current_ != db_.size() && db_[current_++] != '"') {
+            }
+            if (current_ == db_.size()) {
+              return SetFailedAndReturnFalse();
+            }
+            usr->username = std::string(db_.substr(name_start, current_ - name_start - 1));
+            // continue to parse the list with usernames and append them to the vector
+            
+            if (!Match("},")) {
+              if (db_[current_ - 1] == ']' && current_ == db_.size()) {
+                return true;
+              }
+              return SetFailedAndReturnFalse();
+            }
+            return true;
+        }
         
     private:
     // helper functions
