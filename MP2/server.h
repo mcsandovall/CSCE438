@@ -108,9 +108,6 @@ class Parser{
             if (failed_ || Finished() || !Match("{")) {
               return SetFailedAndReturnFalse();
             }
-            if (!Match(location_) || !Match("{") || !Match(latitude_)) {
-              return SetFailedAndReturnFalse();
-            }
             size_t name_start = current_;
             while (current_ != db_.size() && db_[current_++] != '"') {
             }
@@ -159,3 +156,21 @@ class Parser{
     const std::string list_followers_ = "\"list_followers\":";
 };
 
+void ParseDB(std::string &db, std::vector<std::string> * _user_db){
+    _user_db->clear();
+    std::string db_content(db);
+    db_content.erase(
+    std::remove_if(db_content.begin(), db_content.end(), isspace),
+    db_content.end());
+    
+    Parser parser(db_content);
+    User usr;
+    while (!parser.Finished()) {
+        _user_db->push_back(usr);
+        if (!parser.TryParseOne(&_user_db->back())) {
+          std::cout << "Error parsing the db file";
+          feature_list->clear();
+          break;
+        }
+    }
+}
