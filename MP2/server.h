@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -88,7 +89,7 @@ class User{
         std::string username;
         std::vector<std::string> list_followers;
         std::vector<std::string> following_list;
-}
+};
 
 // simple parser for the json file with all the users
 class Parser{
@@ -129,9 +130,9 @@ class Parser{
     
     bool failed_ = false;
     std::string db_;
-    std::size_t current = 0;
+    std::size_t current_ = 0;
     const std::string username_ = "\"username\":";
     const std::string following_list = "\"following_list\":";
     const std::string list_followers_ = "\"list_followers\":";
-}
+};
 
