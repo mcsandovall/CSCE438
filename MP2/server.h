@@ -85,6 +85,7 @@ class User{
             }
             return FAILURE_INVALID_USERNAME;
         }
+        void set_username(std::string name){username = name;}
     private:
         std::string username;
         std::vector<std::string> list_followers;
@@ -114,7 +115,7 @@ class Parser{
             if (current_ == db_.size()) {
               return SetFailedAndReturnFalse();
             }
-            usr->username = std::string(db_.substr(name_start, current_ - name_start - 1));
+            usr->set_username(std::string(db_.substr(name_start, current_ - name_start - 1)));
             // continue to parse the list with usernames and append them to the vector
             
             if (!Match("},")) {
@@ -156,7 +157,7 @@ class Parser{
     const std::string list_followers_ = "\"list_followers\":";
 };
 
-void ParseDB(std::string &db, std::vector<std::string> * _user_db){
+void ParseDB(std::string &db, std::vector<User> * _user_db){
     _user_db->clear();
     std::string db_content(db);
     db_content.erase(
@@ -169,7 +170,7 @@ void ParseDB(std::string &db, std::vector<std::string> * _user_db){
         _user_db->push_back(usr);
         if (!parser.TryParseOne(&_user_db->back())) {
           std::cout << "Error parsing the db file";
-          feature_list->clear();
+          _user_db->clear();
           break;
         }
     }
