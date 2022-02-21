@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -11,7 +12,7 @@
  * This is where i will define the datastructure and parser needed for the database
 */
 
-enum Status
+enum SStatus
 {
     SUCCESS,
     FAILURE_ALREADY_EXISTS,
@@ -21,29 +22,19 @@ enum Status
     FAILURE_UNKNOWN
 };
 
-std::vector<User> user_db;
-
 class User{
     public:
-        enum Status add_follower(std::string _username){
+        enum SStatus add_follower(std::string _username){
             // check if user already following
             for(std::string follower : list_followers){
                 if(follower == _username){
                     return FAILURE_ALREADY_EXISTS;
                 }
             }
-            // check if the user exist
-            for(User usr: user_db){
-                if(usr.username == _username){
-                    // exist, add it to the list of followers
-                    list_followers.push_back(_username);
-                    return SUCCESS;
-                }
-            }
- 
-            return FAILURE_INVALID_USERNAME;
+            list_followers.push_back(_username);
+            return SUCCESS;
         }
-        enum Status remove_follower(std::string _username){
+        enum SStatus remove_follower(std::string _username){
             // check if it is in the list
             for(int i = 0; i < list_followers.size(); ++i){
                 if(list_followers[i] == _username){
@@ -54,7 +45,7 @@ class User{
             }
             return FAILURE_INVALID_USERNAME;
         }
-        enum Status follow_user(std::string _username){
+        enum SStatus follow_user(std::string _username){
             // check if user already in following list
             for(std::string followee : following_list){
                 if(followee == _username){
@@ -62,35 +53,45 @@ class User{
                 }
             }
             
-            // chec if user exist
-            for(User usr :  user_db){
-                if(usr.username == _username){
-                    following_list.push_back(_username);
-                    usr.add_follower(this->username);
+            following_list.push_back(_username);
+            
+            return SUCCESS;
+        }
+        enum SStatus unfollow_user(std::string _username){
+            for(int i = 0; i < following_list.size();++i){
+                if(following_list[i] == _username){
+                    following_list.erase(following_list.begin() + i);
                     return SUCCESS;
                 }
             }
             
-            return FAILURE_NOT_EXISTS;
-        }
-        enum Status unfollow_user(std::string _username){
-            // look for the user in the db
-            for(int i = 0; i < user_db.size(); ++i){
-                if(user_db[i].username == _username){
-                    // exist remove it from your following list and remove youself from thier following list
-                    following_list.erase(following_list.begin() + i);
-                    user_db[i].remove_follower(this->username);
-                    return SUCCESS;
-                }
-            }
             return FAILURE_INVALID_USERNAME;
         }
+        void make_post(std::string _post){posts.push_back(_post);}
         void set_username(std::string name){username = name;}
+        std::string get_username(){return username;}
+        std::vector<std::string> getFollowingList(){return following_list;}
+        std::vector<std::string> getListOfFollwers(){return list_followers;}
+        std::vector<std::string> getPosts(){return posts;}
     private:
         std::string username;
         std::vector<std::string> list_followers;
         std::vector<std::string> following_list;
+        std::vector<std::string> posts;
 };
+
+// function to get the content of the file
+std::string getDbFileContent(std::string filename){
+    std::ifstream db_file(filename);
+    if(!db_file.is_open()){
+        std::ofstream file(filename);
+        return "";
+    }
+    
+    std::stringstream db;
+    db << db_file.rdbuf();
+    return db.str();
+}
 
 // simple parser for the json file with all the users
 class Parser{
@@ -109,6 +110,10 @@ class Parser{
             if (failed_ || Finished() || !Match("{")) {
               return SetFailedAndReturnFalse();
             }
+           
+            if(!Match(username_) || !Match("\"")){
+                return SetFailedAndReturnFalse();
+            }
             size_t name_start = current_;
             while (current_ != db_.size() && db_[current_++] != '"') {
             }
@@ -117,12 +122,46 @@ class Parser{
             }
             usr->set_username(std::string(db_.substr(name_start, current_ - name_start - 1)));
             // continue to parse the list with usernames and append them to the vector
-            
+
+            if(!Match(",") || !Match(following_list_) || !Match("[")){
+                return SetFailedAndReturnFalse();
+            }
+            std::string followee;
+            while(current_ != db_.size() && db_[current_] != ']'){
+                if(!Match("\"")){
+                    return SetFailedAndReturnFalse();
+                }
+                name_start = current_;
+                while (current_ != db_.size() && db_[current_] != '"') {++current_;};
+                followee = db_.substr(name_start, current_ - name_start);
+                usr->follow_user(followee);
+                if(!Match("\"") && !Match(",")){++current_;}
+                if(db_[current_] == ']'){break;}
+                ++current_;
+            }
+            ++current_;
+            if(!Match(",") || !Match(list_followers_) || !Match("[")){
+                return SetFailedAndReturnFalse();
+            }
+            std::string follower;
+            while(current_ != db_.size() && db_[current_] != ']'){
+                if(!Match("\"")){
+                    return SetFailedAndReturnFalse();
+                }
+                name_start = current_;
+                while (current_ != db_.size() && db_[current_] != '"') {++current_;};
+                follower = db_.substr(name_start, current_ - name_start);
+                usr->add_follower(follower);
+                if(!Match("\"") && !Match(",")){++current_;}
+                if(db_[current_] == ']'){break;}
+                ++current_;
+            }
+            ++current_;
             if (!Match("},")) {
-              if (db_[current_ - 1] == ']' && current_ == db_.size()) {
-                return true;
-              }
-              return SetFailedAndReturnFalse();
+                if (db_[current_ - 1] == ']' && current_ == db_.size()) {
+                    return true;
+                }
+                return SetFailedAndReturnFalse();
             }
             return true;
         }
@@ -140,38 +179,100 @@ class Parser{
         return eq;
     }
     
-    void ReadLong(long* l) {
-        std::size_t start = current_;
-        while (current_ != db_.size() && db_[current_] != ',' && db_[current_] != '}') {
-          current_++;
-        }
-        // It will throw an exception if fails.
-        *l = std::stol(db_.substr(start, current_ - start));
-    }
-    
     bool failed_ = false;
     std::string db_;
     std::size_t current_ = 0;
     const std::string username_ = "\"username\":";
-    const std::string following_list = "\"following_list\":";
+    const std::string following_list_ = "\"following_list\":";
     const std::string list_followers_ = "\"list_followers\":";
 };
 
 void ParseDB(std::string &db, std::vector<User> * _user_db){
+    if(db == ""){return;}
     _user_db->clear();
     std::string db_content(db);
     db_content.erase(
-    std::remove_if(db_content.begin(), db_content.end(), isspace),
-    db_content.end());
+    std::remove_if(db_content.begin(), db_content.end(), isspace),db_content.end());
     
     Parser parser(db_content);
     User usr;
     while (!parser.Finished()) {
         _user_db->push_back(usr);
         if (!parser.TryParseOne(&_user_db->back())) {
-          std::cout << "Error parsing the db file";
+          std::cout << "Error parsing the db file" << std::endl;
           _user_db->clear();
           break;
         }
+    }
+}
+
+void UpdateFileContent(std::vector<User> &user_db){
+    if(user_db.size() == 0){return;}
+    // this function will update the content of the file after the server was active
+    std::ofstream db_file("user_db.json");
+    if(!db_file.is_open()){
+        cout << "Error couldnt not open database file" << endl;
+        return;
+    }
+    db_file.clear();
+    std::string file_content = "[";
+    for (int i  = 0; i < user_db.size();++i){
+        file_content += "{\n";
+        for(int i = 0; i < 4; ++i){
+            file_content += " ";
+        }
+        file_content += "\"username\" : \"" + user_db[i].get_username() + "\",\n";
+        for(int i = 0; i < 4; ++i){
+            file_content += " ";
+        }
+        file_content += "\"following_list\" : [";
+        std::vector<std::string> following_list = user_db[i].getFollowingList();
+        for(int i = 0; i < following_list.size(); ++i){
+            file_content += "\"" + following_list[i] + "\"";
+            if(i != (following_list.size()-1)){
+                file_content+= ",";
+            }
+        }
+        file_content += "],\n";
+        for(int i = 0; i < 4; ++i){
+            file_content += " ";
+        }
+        file_content += "\"list_followers\" : [";
+        std::vector<std::string> list_following = user_db[i].getListOfFollwers();
+        for(int i = 0; i < list_following.size(); ++i){
+            file_content += "\"" + list_following[i] + "\"";
+            if(i != (list_following.size()-1)){
+                file_content+= ",";
+            }
+        }
+        file_content += "]\n";
+        if(i != user_db.size()-1){
+            file_content += "},";
+        }else{
+            file_content += "}]";
+        }
+    }
+    db_file << file_content;
+    db_file.close();
+}
+
+void record_posts(User * usr){
+    std::ofstream usr_file(usr->get_username() + ".txt");
+    if(!usr_file.is_open()){
+        std::cout << "Error could not open " << usr->get_username() << " posts file" << std::endl;
+        return;
+    }
+    std::vector<std::string> posts = usr->getPosts();
+    for(int i = 0; i < posts.size(); ++i){
+        usr_file << posts[i];
+        if(i != posts.size()-1){
+            usr_file << "\n";
+        }
+    }
+}
+
+void record_usersPost(std::vector<User> * user_db){
+    for(User usr : (*user_db)){
+        record_posts(&usr);
     }
 }
