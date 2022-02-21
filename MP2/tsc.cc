@@ -176,26 +176,26 @@ IReply Client::processCommand(std::string& input)
             }
             break;
         case 'L': // list
-            // list does not need another agument
-            status = _stub->List(&context, request, &reply);
-            Ireply.grpc_status = status;
-            if(status.ok()){
-                Ireply.comm_status = parse_response(reply);
-                if(Ireply.comm_status == SUCCESS){
-                    // get the list of all users
-                    for(int i = 0; i < reply.all_users().size(); ++i){
-                        Ireply.all_users.push_back(reply.all_users(i));
-                    }
-                    // get the list of following users
-                    for(int i = 0; i < reply.following_users().size(); ++i){
-                        Ireply.following_users.push_back(reply.following_users(i));
-                    }
-                }
-                return IReply;
-            }else{
-                Ireply.comm_status = FAILURE_UNKNOWN;
-                return Ireply;
-            }
+            // // list does not need another agument
+            // status = _stub->List(&context, request, &reply);
+            // Ireply.grpc_status = status;
+            // if(status.ok()){
+            //     Ireply.comm_status = parse_response(reply);
+            //     if(Ireply.comm_status == SUCCESS){
+            //         // get the list of all users
+            //         for(int i = 0; i < reply.all_users().size(); ++i){
+            //             Ireply.all_users.push_back(reply.all_users(i));
+            //         }
+            //         // get the list of following users
+            //         for(int i = 0; i < reply.following_users().size(); ++i){
+            //             Ireply.following_users.push_back(reply.following_users(i));
+            //         }
+            //     }
+            //     return IReply;
+            // }else{
+            //     Ireply.comm_status = FAILURE_UNKNOWN;
+            //     return Ireply;
+            // }
             break;
         case 'T': // set everything for timeline mode
             Ireply.grpc_status = Status::OK;

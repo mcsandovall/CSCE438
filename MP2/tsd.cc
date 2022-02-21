@@ -34,6 +34,7 @@ using csce438::SNSService;
 
 // use vector for the database
 std::vector<User> user_db;
+std::vector<User> current_db;
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -44,7 +45,25 @@ class SNSServiceImpl final : public SNSService::Service {
     // all_users & following_users are populated
     // ------------------------------------------------------------
     
-    // return a list of all users and the list of users that follow each users request
+    // get a list of all users and find the user from the request
+    std::string user_name = request->username();
+    User * user = nullptr;
+    reply->set_msg("Server: LIST");
+    for(User usr : current_db){
+      if(user_name == usr.get_username()){
+        user = &usr;
+      }
+      reply->add_all_users(usr.get_username());
+    }
+    
+    if(!user){
+      return Status::UNKNOWN; // for wtv reason the user making the request doesnt exist
+    }
+    
+    for(std::string followee : user->getFollowingList()){
+      reply->add_following_users(followee);
+    }
+    
     return Status::OK;
   }
 
@@ -54,6 +73,33 @@ class SNSServiceImpl final : public SNSService::Service {
     // request from a user to follow one of the existing
     // users
     // ------------------------------------------------------------
+    
+    // get both the requester and the requestee username 
+    std::string rqtr = request->username(), rqte = request->arguments(0); // get the first initial
+    
+    // find both users
+    User * requester = findUser(rqtr, &current_db);
+    if(!requester){ // the user is not active for wtv reason
+      reply->set_msg("USER NOT FOUND");
+      return Status::CANCELLED;
+    }
+    
+    User * requestee = findUser(rqte, &current_db);
+    if(!requestee){
+      // it doesnt exit in the current db try in the global
+      requestee = findUser(rqte, &user_db);
+      if(!requestee){
+        // user doesnt exist
+        reply->set_msg("U FAILURE_INVALID_USERNAME");
+        Status:OK;
+      }
+    }
+    
+    // if both users were found add to following list and this-> to list_followers
+    reply->set_msg(requester->follow_user(rqte));
+    // requestee
+    requestee->add_follower(rqtr);
+    
     return Status::OK; 
   }
 
@@ -63,6 +109,9 @@ class SNSServiceImpl final : public SNSService::Service {
     // request from a user to unfollow one of his/her existing
     // followers
     // ------------------------------------------------------------
+    
+    // get the username from the request
+    std::string user_name = 
     return Status::OK;
   }
   
