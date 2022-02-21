@@ -7,10 +7,12 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 #include <stdlib.h>
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
+#include "server.h"
 
 #include "sns.grpc.pb.h"
 
@@ -28,7 +30,10 @@ using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
 
-#define USER_DIR "all_user_db.txt"
+#define DB_PATH "user_db.json"
+
+// use vector for the database
+std::vector<User> user_db;
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -87,18 +92,17 @@ void RunServer(std::string port_no) {
   // which would start the server, make it listen on a particular
   // port number.
   // ------------------------------------------------------------
-  ServerBuilder builder;
   SNSService service;
+  
+  // populate the server databse
+  std::string db = getDbFileContent(DB_PATH);
+  ParseDB(db, *user_db);
+  
+  ServerBuilder builder;
   builder.AddListeningPort(port_no, grpc::InsecureServerCredentials());
-  builder.AddRegisterService(&service);
+  builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "Server listening on " << port_no << std::endl;
-  // open the all user database
-  std::fstream file(USER_DIR, std::fstream::out);
-  if(!file.is_open()){
-    // file couldnt be opened
-    perror << "Database could not be opened";
-  }
+  std::cout << "Server listening on " << server_address << std::endl;
   server->Wait();
 }
 
@@ -116,5 +120,5 @@ int main(int argc, char** argv) {
     }
   }
   RunServer(port);
-  return 0;
+   return 0;
 }
