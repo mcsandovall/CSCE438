@@ -30,32 +30,32 @@ class User{
                 if(list_followers[i] == _username){
                     // exist now erase it
                     list_followers.erase(list_followers.begin() + i);
-                    return SUCCESS;
+                    return "SUCCESS";
                 }
             }
-            return FAILURE_INVALID_USERNAME;
+            return "FAILURE_INVALID_USERNAME";
         }
-        enum SStatus follow_user(std::string _username){
+        std::string follow_user(std::string _username){
             // check if user already in following list
             for(std::string followee : following_list){
                 if(followee == _username){
-                    return FAILURE_ALREADY_EXISTS;
+                    return "FAILURE_ALREADY_EXISTS";
                 }
             }
             
             following_list.push_back(_username);
             
-            return SUCCESS;
+            return "SUCCESS";
         }
-        enum SStatus unfollow_user(std::string _username){
+        std::string unfollow_user(std::string _username){
             for(int i = 0; i < following_list.size();++i){
                 if(following_list[i] == _username){
                     following_list.erase(following_list.begin() + i);
-                    return SUCCESS;
+                    return "SUCCESS";
                 }
             }
             
-            return FAILURE_INVALID_USERNAME;
+            return "FAILURE_INVALID_USERNAME";
         }
         void make_post(std::string _post){posts.push_back(_post);}
         void set_username(std::string name){username = name;}
@@ -201,7 +201,7 @@ void UpdateFileContent(std::vector<User> &user_db){
     // this function will update the content of the file after the server was active
     std::ofstream db_file("user_db.json");
     if(!db_file.is_open()){
-        cout << "Error couldnt not open database file" << endl;
+        std::cout << "Error couldnt not open database file" << std::endl;
         return;
     }
     db_file.clear();
@@ -270,9 +270,9 @@ void record_usersPost(std::vector<User> * user_db){
 User * findUser(std::string &username, std::vector<User> * db){ // find the user in the dabatase
     if(db->size() == 0){return nullptr;}
     
-    for(User usr : db){
-        if(username == usr.get_username()){
-            return &usr; // return a reference to the user
+    for(int i = 0; i < db->size();++i){
+        if(username == db->at(i).get_username()){
+            return &(db->at(i));
         }
     }
     return nullptr; // return nullptr user not found
