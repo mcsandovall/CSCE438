@@ -12,29 +12,19 @@
  * This is where i will define the datastructure and parser needed for the database
 */
 
-enum SStatus
-{
-    SUCCESS,
-    FAILURE_ALREADY_EXISTS,
-    FAILURE_NOT_EXISTS,
-    FAILURE_INVALID_USERNAME,
-    FAILURE_INVALID,
-    FAILURE_UNKNOWN
-};
-
 class User{
     public:
-        enum SStatus add_follower(std::string _username){
+        std::string add_follower(std::string _username){
             // check if user already following
             for(std::string follower : list_followers){
                 if(follower == _username){
-                    return FAILURE_ALREADY_EXISTS;
+                    return "FAILURE_ALREADY_EXISTS";
                 }
             }
             list_followers.push_back(_username);
-            return SUCCESS;
+            return "SUCCESS";
         }
-        enum SStatus remove_follower(std::string _username){
+        std::string remove_follower(std::string _username){
             // check if it is in the list
             for(int i = 0; i < list_followers.size(); ++i){
                 if(list_followers[i] == _username){
@@ -275,4 +265,15 @@ void record_usersPost(std::vector<User> * user_db){
     for(User usr : (*user_db)){
         record_posts(&usr);
     }
+}
+
+User * findUser(std::string &username, std::vector<User> * db){ // find the user in the dabatase
+    if(db->size() == 0){return nullptr;}
+    
+    for(User usr : db){
+        if(username == usr.get_username()){
+            return &usr; // return a reference to the user
+        }
+    }
+    return nullptr; // return nullptr user not found
 }
