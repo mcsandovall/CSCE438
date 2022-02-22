@@ -186,7 +186,27 @@ class SNSServiceImpl final : public SNSService::Service {
     // and then making it available on his/her follower's streams
     // ------------------------------------------------------------
     
-    
+    std::string c_username;
+    User * usr;
+    Message msg;
+    if (stream->Read(&msg)){
+      // get the username from the message
+      c_username = msg.username();
+      usr = findUser(c_username, &current_db);
+      getRecentPosts(usr, &current_db);
+      for(Message post : (*usr->getUnseenPosts())){
+        stream->Write(post);
+      }
+      
+      // add the message to the post vector
+      usr->make_post(msg);
+      // add it to the user file
+      std::ofstream ofs(c_username + ".txt");
+      if(!ofs.is_open()){
+        return Status::OK;
+      }
+      ofs << msg.msg() + google::protobuf::util::TimeUtil::ToString(msg.timestamp());
+    }
     return Status::OK;
   }
 

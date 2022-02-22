@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <vector>
+#include <google/protobuf/timestamp.pb.h>
+#include <google/protobuf/duration.pb.h>
+#include "sns.grpc.pb.h"
+#include <grpc++/grpc++.h>
+
+using csce438::Message;
 
 /**
  * This is where i will define the datastructure and parser needed for the database
@@ -62,17 +68,22 @@ class User{
             
             return "FAILURE_INVALID_USERNAME";
         }
-        void make_post(std::string _post){posts.push_back(_post);}
+        void make_post(Message _post){posts.push_back(_post);}
+        void add_unseenPost(Message _post){unseen_post.push_back(_post);}
         void set_username(std::string name){username = name;}
         std::string get_username(){return username;}
         std::vector<std::string> getFollowingList(){return following_list;}
         std::vector<std::string> getListOfFollwers(){return list_followers;}
-        std::vector<std::string> getPosts(){return posts;}
+        std::vector<Message> * getPosts(){return &posts;}
+        std::vector<Message> * getUnseenPosts(){return &unseen_post;}
+        bool SeenTimeLine(){return seenTimeline == true;}
     private:
         std::string username;
         std::vector<std::string> list_followers;
         std::vector<std::string> following_list;
-        std::vector<std::string> posts;
+        std::vector<Message> posts;
+        std::vector<Message> unseen_post;
+        bool seenTimeline = false;
 };
 
 // function to get the content of the file
@@ -295,7 +306,7 @@ void loadPosts(User * usr){
     }
     
     // add all the post into the post array
-    usr->getPosts().clear();
+    usr->getPosts()->clear();
     std::string post;
     while(!post_file.eof()){
         post_file >> post;
@@ -304,8 +315,26 @@ void loadPosts(User * usr){
     post_file.close();
 }
 
-std::vector<std::string> getRecentPosts(User * usr){
-    // gets the 20 most recent post from the user
-    std::vector<std::string> RecentPosts;
-    return RecentPosts;
+void getRecentPosts(User * usr, std::vector<User> * db){
+    // get the 20 most recent post from the users following
+    // them inlcuded
+    std::vector<Message> all_post;
+    User * current_user;
+    for(std::string c_usr : usr->getFollowingList()){
+        current_user = findUser(c_usr, db);
+        // get all their post into the vector
+        for(Message post : (*current_user->getPosts())){
+            all_post.push_back(post);
+        }
+    }
+    
+    // sort the vector with respect to the time
+    // some sort
+    
+    // add unseen post to the user unseen post vector, with index 0 being most recent
+    usr->getUnseenPosts()->clear();
+    int index = all_post.size();
+    while(usr->getUnseenPosts()->size() != 20){
+        usr->add_unseenPost(all_post[--index]);
+    }
 }
