@@ -13,6 +13,8 @@
 #include <grpc++/grpc++.h>
 
 using csce438::Message;
+using google::protobuf::Timestamp;
+using grpc::ServerWriter;
 
 /**
  * This is where i will define the datastructure and parser needed for the database
@@ -68,8 +70,8 @@ class User{
             
             return "FAILURE_INVALID_USERNAME";
         }
-        void make_post(Message _post){posts.push_back(_post);}
-        void add_unseenPost(Message _post){unseen_post.push_back(_post);}
+        void make_post(Message &_post){posts.push_back(_post);}
+        void add_unseenPost(Message &_post){unseen_post.push_back(_post);}
         void set_username(std::string name){username = name;}
         std::string get_username(){return username;}
         std::vector<std::string> getFollowingList(){return following_list;}
@@ -263,27 +265,6 @@ void UpdateFileContent(std::vector<User> &user_db){
     db_file.close();
 }
 
-void record_posts(User * usr){
-    std::ofstream usr_file(usr->get_username() + ".txt");
-    if(!usr_file.is_open()){
-        std::cout << "Error could not open " << usr->get_username() << " posts file" << std::endl;
-        return;
-    }
-    std::vector<std::string> posts = usr->getPosts();
-    for(int i = 0; i < posts.size(); ++i){
-        usr_file << posts[i];
-        if(i != posts.size()-1){
-            usr_file << "\n";
-        }
-    }
-}
-
-void record_usersPost(std::vector<User> * user_db){
-    for(User usr : (*user_db)){
-        record_posts(&usr);
-    }
-}
-
 User * findUser(std::string &username, std::vector<User> * db){ // find the user in the dabatase
     if(db->size() == 0){return nullptr;}
     
@@ -308,13 +289,78 @@ void loadPosts(User * usr){
     // add all the post into the post array
     usr->getPosts()->clear();
     std::string post;
+    std::vector<std::string> file_posts;
     while(!post_file.eof()){
         post_file >> post;
-        usr->make_post(post);
+        file_posts.push_back(post);
     }
     post_file.close();
+    
+    // make the message out of the posts and add them to post from the user
+    Message msg;
+    int space = 0;
+    std::string message;
+    std::string tm;
+    Timestamp tmsp;
+    int i = file_posts.size() - 21;
+    if(i < 0){i = 0;}
+    
+    // load the most recent 20 post always
+    for(i; i < file_posts.size();++i){
+        if(i == 20){break;}
+        msg.set_username(usr->get_username());
+        while(file_posts[i].at(++space) != ' '){}
+        message = file_posts[i].substr(0, space);
+        msg.set_msg(message);
+        tm = file_posts[i].substr(space+1,file_posts[i].size());
+        google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
+        msg.set_allocated_timestamp(&tmsp);
+        usr->make_post(msg);
+    }
 }
 
+// quicksort to sort out the messages from the user 
+int partition(std::vector<Message> &arr, int start, int end){
+    Timestamp pivot = arr[start].timestamp();
+    
+    int count = 0;
+    for(int i = start+1; i <= end;++i){
+        if(arr[i].timestamp() <= pivot){
+            ++count;
+        }
+    }
+    
+    int pivotIndex = start + count;
+    std::swap(arr[start], arr[pivotIndex]);
+    
+    int i = start, j = end;
+    while(i < pivotIndex && j > pivotIndex){
+        while (arr[i].timestamp() <= pivot) {
+            i++;
+        }
+ 
+        while (arr[j].timestamp() > pivot) {
+            j--;
+        }
+ 
+        if (i < pivotIndex && j > pivotIndex) {
+            std::swap(arr[i++], arr[j--]);
+        }
+    }
+    return pivotIndex;
+}
+
+void QuickSort(std::vector<Message> &arr, int start, int end){
+    if(start >= end){
+        return;
+    }
+    
+    int p = partition(arr,start,end);
+    
+    QuickSort(arr,start,p-1);
+    QuickSort(arr,p+1,end);
+}
+// get the recent post from all the followees
 void getRecentPosts(User * usr, std::vector<User> * db){
     // get the 20 most recent post from the users following
     // them inlcuded
@@ -329,12 +375,14 @@ void getRecentPosts(User * usr, std::vector<User> * db){
     }
     
     // sort the vector with respect to the time
-    // some sort
+    QuickSort(all_post,0, all_post.size()-1);
     
-    // add unseen post to the user unseen post vector, with index 0 being most recent
+    // add unseen post to the user unseen post vector, with index 20 being most recent
     usr->getUnseenPosts()->clear();
-    int index = all_post.size();
-    while(usr->getUnseenPosts()->size() != 20){
-        usr->add_unseenPost(all_post[--index]);
+    int index = all_post.size() - 21;
+    if(index < 0){index = 0;}
+    
+    for(index; index < all_post.size(); ++index){
+        usr->add_unseenPost(all_post[index]);
     }
 }

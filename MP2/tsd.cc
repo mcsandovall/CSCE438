@@ -58,9 +58,9 @@ class SNSServiceImpl final : public SNSService::Service {
       reply->add_all_users(usr.get_username());
     }
     
-    // get the list of people user follows
-    for(std::string followee : usr->getFollowingList()){
-      reply->add_following_users(followee);
+    // get the list of users following the current users
+    for(std::string follower : usr->getListOfFollwers()){
+      reply->add_following_users(follower);
     }
     
     return Status::OK;
@@ -187,25 +187,33 @@ class SNSServiceImpl final : public SNSService::Service {
     // ------------------------------------------------------------
     
     std::string c_username;
-    User * usr;
-    Message msg;
-    if (stream->Read(&msg)){
-      // get the username from the message
+    User * usr, * flwr;
+    Message msg, unseen_post;
+    while (stream->Read(&msg)){
       c_username = msg.username();
       usr = findUser(c_username, &current_db);
-      getRecentPosts(usr, &current_db);
-      for(Message post : (*usr->getUnseenPosts())){
-        stream->Write(post);
+      if(!usr->SeenTimeLine()){
+        // add the 20 messages to their unseen queue
+        getRecentPosts(usr, &current_db);
+      }
+      //else pop from their unseen post
+      while(usr->getUnseenPosts()->size() != 0){
+        unseen_post = usr->getUnseenPosts()->back();
+        usr->getUnseenPosts()->pop_back();
+        stream->Write(unseen_post);
       }
       
-      // add the message to the post vector
-      usr->make_post(msg);
-      // add it to the user file
-      std::ofstream ofs(c_username + ".txt");
-      if(!ofs.is_open()){
-        return Status::OK;
+      //add your post to all your followers unseen post
+      for(std::string follower : usr->getListOfFollwers()){
+        flwr = findUser(follower, &current_db);
+        flwr->add_unseenPost(msg);
       }
+      
+      // log the message into the user file and add it to your post vector
+      usr->getPosts()->push_back(msg);
+      std::ofstream ofs(c_username + ".txt");
       ofs << msg.msg() + google::protobuf::util::TimeUtil::ToString(msg.timestamp());
+      ofs.close();
     }
     return Status::OK;
   }
