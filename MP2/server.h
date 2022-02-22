@@ -80,6 +80,7 @@ std::string getDbFileContent(std::string filename){
     std::ifstream db_file(filename);
     if(!db_file.is_open()){
         std::ofstream file(filename);
+        file.close();
         return "";
     }
     
@@ -289,7 +290,7 @@ void loadPosts(User * usr){
     // check if the file exist
     std::ifstream post_file(usr->get_username() + ".txt");
     if(!post_file.is_open()){
-        std::cout << "Error opening " << usr->get_username() << " file " << endl;
+        std::cout << "Error opening " << usr->get_username() << " file " << std::endl;
         return;
     }
     
@@ -297,8 +298,14 @@ void loadPosts(User * usr){
     usr->getPosts().clear();
     std::string post;
     while(!post_file.eof()){
-        post << post_file;
+        post_file >> post;
         usr->make_post(post);
     }
     post_file.close();
+}
+
+std::vector<std::string> getRecentPosts(User * usr){
+    // gets the 20 most recent post from the user
+    std::vector<std::string> RecentPosts;
+    return RecentPosts;
 }

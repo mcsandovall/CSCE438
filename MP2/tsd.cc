@@ -160,15 +160,20 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string c_username = request->username();
     User * c_usr = findUser(c_username, &current_db);
     
-    // if the user exist load their post in the array
+    // if the user exist load their post
     if(c_usr){
       loadPosts(c_usr);
-      return Status::Ok;
-    }else{// if user doesnt exist create a new user, add it to the database and create a file for their post
-      User c_usr(c_username);
-      current_db.push_back(c_usr);
-      std::ofstream post_file(c_username + ".txt");
-      post_file.close();
+    }else{// if user doesnt exist in current db check the global db
+      c_usr = findUser(c_username, &user_db);
+      if(!c_usr){// user doesnt exist create new user and add it to the database and create a file for their post
+        User c_usr(c_username);
+        current_db.push_back(c_usr);
+        std::ofstream post_file(c_username + ".txt");
+        post_file.close();
+      }else{ // user exist in global db load their post and add it to the current db
+        loadPosts(c_usr);
+        current_db.push_back(*(c_usr));
+      }
     }
     
     return Status::OK;
@@ -180,6 +185,8 @@ class SNSServiceImpl final : public SNSService::Service {
     // receiving a message/post from a user, recording it in a file
     // and then making it available on his/her follower's streams
     // ------------------------------------------------------------
+    
+    
     return Status::OK;
   }
 
