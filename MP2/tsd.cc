@@ -45,7 +45,23 @@ class SNSServiceImpl final : public SNSService::Service {
     // all_users & following_users are populated
     // ------------------------------------------------------------
     
-    // get a list of all users and find the user from the request
+    // find the user in the current db
+    std::string username = request->username();
+    User * usr = findUser(username, &current_db);
+    if(!usr){ // user doesnt exist for wtv reasosn
+      reply->set_msg("SERVER: ERROR USER DOESNT EXIST");
+      return Status::CANCELLED;
+    }
+    
+    // get the names of all the current users 
+    for(User usr : current_db){
+      reply->add_all_users(usr.get_username());
+    }
+    
+    // get the list of people user follows
+    for(std::string followee : usr->getFollowingList()){
+      reply->add_following_users(followee);
+    }
     
     return Status::OK;
   }
@@ -57,6 +73,38 @@ class SNSServiceImpl final : public SNSService::Service {
     // users
     // ------------------------------------------------------------
     
+    // get the current user
+    std::string username = request->username();
+    User * usr = findUser(username, &current_db);
+    if(!usr){
+      reply->set_msg("SERVER: ERROR_USER_DOESNT_EXIST");
+      return Status::CANCELLED;
+    }
+    
+    // find the user to follow
+    std::string f_username = request->arguments(0);
+    User * followee = findUser(f_username, &current_db);
+    if(!followee){ // user does not exist
+      reply->set_msg("SERVER: FAILURE_INVALID_USERNAME");
+      return Status::OK;
+    }
+    
+    // follow the user
+    std::string UStatus = usr->follow_user(f_username);
+    if(UStatus != "SUCCESS"){
+      reply->set_msg("SERVER: " + UStatus);
+      return Status::OK;
+    }
+    
+    // add current as a follower for the other user
+    std::string FStatus = followee->add_follower(username);
+    if(FStatus != "SUCCESS"){
+      reply->set_msg("SERVER: " + FStatus);
+      return Status::OK;
+    }
+    
+    // success the process was completed
+    reply->set_msg("SERVER" + UStatus);
     return Status::OK; 
   }
 
@@ -67,8 +115,37 @@ class SNSServiceImpl final : public SNSService::Service {
     // followers
     // ------------------------------------------------------------
     
-    // get the username from the request
+    // get current user
+    std::string current_username = request->username();
+    User * c_usr = findUser(current_username, &current_db);
+    if(!c_usr){
+      reply->set_msg("SERVER: ERROR_USER_DOESNT_EXIST");
+      return Status::CANCELLED;
+    }
     
+    // get the user to unfollow
+    std::string other_user = request->arguments(0);
+    User * o_usr = findUser(other_user, &current_db);
+    if(!o_usr){ // other user doesnt exist
+      reply->set_msg("SERVER: FAILURE_INVALID_USERNAME");
+      return Status::OK;
+    }
+    
+    // unfollow the user
+    std::string c_status = c_usr->unfollow_user(other_user);
+    if(c_status != "SUCCESS"){
+      reply->set_msg(c_status);
+      return Status::OK;
+    }
+    
+    // remove current user from other following list
+    std::string o_status = o_usr->remove_follower(current_username);
+    if(o_status != "SUCCESS"){
+      reply->set_msg("SERVER: " + o_status);
+      return Status::OK;
+    }
+    
+    reply->set_msg("SERVER: " + c_status);
     return Status::OK;
   }
   
@@ -78,6 +155,22 @@ class SNSServiceImpl final : public SNSService::Service {
     // a new user and verify if the username is available
     // or already taken
     // ------------------------------------------------------------
+    
+    // check if user already exist
+    std::string c_username = request->username();
+    User * c_usr = findUser(c_username, &current_db);
+    
+    // if the user exist load their post in the array
+    if(c_usr){
+      loadPosts(c_usr);
+      return Status::Ok;
+    }else{// if user doesnt exist create a new user, add it to the database and create a file for their post
+      User c_usr(c_username);
+      current_db.push_back(c_usr);
+      std::ofstream post_file(c_username + ".txt");
+      post_file.close();
+    }
+    
     return Status::OK;
   }
 

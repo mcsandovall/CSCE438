@@ -14,6 +14,11 @@
 
 class User{
     public:
+    
+        User(std::string _un) : username(_un){
+            following_list.push_back(_un);
+        }
+        User(){} // does nothing but start the array
         std::string add_follower(std::string _username){
             // check if user already following
             for(std::string follower : list_followers){
@@ -276,4 +281,24 @@ User * findUser(std::string &username, std::vector<User> * db){ // find the user
         }
     }
     return nullptr; // return nullptr user not found
+}
+
+void loadPosts(User * usr){
+    if(!usr){return;}
+    
+    // check if the file exist
+    std::ifstream post_file(usr->get_username() + ".txt");
+    if(!post_file.is_open()){
+        std::cout << "Error opening " << usr->get_username() << " file " << endl;
+        return;
+    }
+    
+    // add all the post into the post array
+    usr->getPosts().clear();
+    std::string post;
+    while(!post_file.eof()){
+        post << post_file;
+        usr->make_post(post);
+    }
+    post_file.close();
 }
