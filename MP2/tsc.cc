@@ -272,6 +272,7 @@ void Client::processTimeline()
     stream->WritesDone();
     stream->Finish();
     exit(1); // end the client process
+    // end the client
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     //
