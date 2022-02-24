@@ -2,7 +2,7 @@
 
 #include <google/protobuf/timestamp.pb.h>
 #include <google/protobuf/duration.pb.h>
-
+#include <signal.h>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -29,7 +29,9 @@ using csce438::SNSService;
 
 // helper functions for the class
 enum IStatus parse_response(Reply &reply);
+void termination_handler(int sig);
 
+bool inTimeline = false;
 
 class Client : public IClient
 {
@@ -48,10 +50,6 @@ class Client : public IClient
         std::string username;
         std::string port;
         std::unique_ptr<SNSService::Stub> _stub; // instance of client stub
-        
-        // You can have an instance of the client stub
-        // as a member variable.
-        //std::unique_ptr<NameOfYourStubClass::Stub> stub_;
 };
 
 int main(int argc, char** argv) {
@@ -60,6 +58,10 @@ int main(int argc, char** argv) {
     std::string username = "default";
     std::string port = "3010";
     int opt = 0;
+    
+    // signal handler
+    signal(SIGINT, termination_handler);
+    
     while ((opt = getopt(argc, argv, "h:u:p:")) != -1){
         switch(opt) {
             case 'h':
@@ -201,6 +203,7 @@ IReply Client::processCommand(std::string& input)
         case 'T': // set everything for timeline mode
             Ireply.grpc_status = Status::OK;
             Ireply.comm_status = SUCCESS;
+            inTimeline = true;
             return Ireply;
     }
 	// ------------------------------------------------------------
@@ -238,9 +241,37 @@ void Client::processTimeline()
     // You should use them as you did in hw1.
 	// ------------------------------------------------------------
     
-    // make a thread that will handle recieving and displaying messages while this function handles writting messages
+    ClientContext context;
+    std::shared_ptr<ClientReaderWriter<Message, Message >> stream(_stub->Timeline(&context));
     
+    // make a lambda function to handle the upcomming request and read them 
+    std::thread reader([stream](){
+       Message message;
+       while(stream->Read(&message)){
+           // read the message into the built in function 
+           time_t utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
+           displayPostMessage(message.username(),message.msg(),utc);
+       }
+    });
     
+    // join the thread
+    reader.join();
+    
+    // write post to the server
+    Message message;
+    Timestamp tmsp;
+    while(inTimeline){ // until the user makes a ctrl^c
+        message.set_username(username);
+        message.set_msg(getPostMessage());
+        Timestamp tmsp(google::protobuf::util::TimeUtil::GetCurrentTime());
+        message.set_allocated_timestamp(&tmsp);
+        // send message
+        stream->Write(message);
+    }
+    // if the process ends
+    stream->WritesDone();
+    stream->Finish();
+    exit(1); // end the client process
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
     //
@@ -259,4 +290,8 @@ enum IStatus parse_response(Reply& reply){
     (message == "FAILURE_NOT_EXISTS") ? FAILURE_NOT_EXISTS : (message == "FAILURE_INVALID_USERNAME") ? FAILURE_INVALID_USERNAME : 
     (message == "FAILURE_INVALID") ? FAILURE_INVALID : FAILURE_UNKNOWN;
     return status;
+}
+
+void termination_handler(int sig){
+    inTimeline = false;
 }

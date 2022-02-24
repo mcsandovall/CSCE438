@@ -13,7 +13,7 @@
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
 #include "server.h"
-
+#include <signal.h>
 #include "sns.grpc.pb.h"
 
 using google::protobuf::Timestamp;
@@ -35,6 +35,8 @@ using csce438::SNSService;
 // use vector for the database
 std::vector<User> user_db;
 std::vector<User> current_db;
+
+void termination_handler(int sig);
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -244,6 +246,9 @@ void RunServer(std::string port_no) {
 
 int main(int argc, char** argv) {
   
+  // signal handler
+  signal(SIGINT, termination_handler);
+  
   std::string port = "3010";
   int opt = 0;
   while ((opt = getopt(argc, argv, "p:")) != -1){
@@ -257,4 +262,10 @@ int main(int argc, char** argv) {
   }
   RunServer(port);
    return 0;
+}
+
+void termination_handler(int sig){
+  // in case of the server failure or interruption write everything to the db file
+  UpdateFileContent(current_db);
+  exit(1);
 }
