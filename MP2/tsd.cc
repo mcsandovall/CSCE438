@@ -198,6 +198,7 @@ class SNSServiceImpl final : public SNSService::Service {
       if(!usr->SeenTimeLine()){
         // add the 20 messages to their unseen queue
         getRecentPosts(usr, &current_db);
+        usr->seenTimeline = true;
       }
       //else pop from their unseen post
       while(usr->getUnseenPosts()->size() != 0){
