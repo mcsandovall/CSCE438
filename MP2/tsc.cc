@@ -10,6 +10,7 @@
 #include <grpc++/grpc++.h>
 #include <google/protobuf/util/time_util.h>
 #include "client.h"
+#include <thread>
 
 #include "sns.grpc.pb.h"
 
@@ -55,7 +56,7 @@ class Client : public IClient
 
 int main(int argc, char** argv) {
 
-    std::string hostname = "localhost";
+    std::string hostname = "127.0.0.1";
     std::string username = "default";
     std::string port = "3010";
     int opt = 0;
@@ -92,7 +93,7 @@ int Client::connectTo()
 	// ------------------------------------------------------------
 	
 	//create a new cheannel for the stub to connect with
-	_stub = SNSService::NewStub(grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials()));
+	_stub = SNSService::NewStub(grpc::CreateChannel(hostname + ":" + port, grpc::InsecureChannelCredentials()));
 	
 	// create a new request to login 
 	Request request;
@@ -176,26 +177,26 @@ IReply Client::processCommand(std::string& input)
             }
             break;
         case 'L': // list
-            // // list does not need another agument
-            // status = _stub->List(&context, request, &reply);
-            // Ireply.grpc_status = status;
-            // if(status.ok()){
-            //     Ireply.comm_status = parse_response(reply);
-            //     if(Ireply.comm_status == SUCCESS){
-            //         // get the list of all users
-            //         for(int i = 0; i < reply.all_users().size(); ++i){
-            //             Ireply.all_users.push_back(reply.all_users(i));
-            //         }
-            //         // get the list of following users
-            //         for(int i = 0; i < reply.following_users().size(); ++i){
-            //             Ireply.following_users.push_back(reply.following_users(i));
-            //         }
-            //     }
-            //     return IReply;
-            // }else{
-            //     Ireply.comm_status = FAILURE_UNKNOWN;
-            //     return Ireply;
-            // }
+            // list does not need another agument
+            status = _stub->List(&context, request, &reply);
+            Ireply.grpc_status = status;
+            if(status.ok()){
+                Ireply.comm_status = parse_response(reply);
+                if(Ireply.comm_status == SUCCESS){
+                    // get a list of all users
+                    for(std::string user : reply.all_users()){
+                        Ireply.all_users.push_back(user);
+                    }
+                    // get the list of followers
+                    for(std::string follower : reply.following_users()){
+                        Ireply.following_users.push_back(follower);
+                    }
+                }
+                return Ireply;
+            }else{
+                Ireply.comm_status = FAILURE_UNKNOWN;
+                return Ireply;
+            }
             break;
         case 'T': // set everything for timeline mode
             Ireply.grpc_status = Status::OK;
@@ -237,7 +238,8 @@ void Client::processTimeline()
     // You should use them as you did in hw1.
 	// ------------------------------------------------------------
     
-    // once into timeline mode call the first 20 messages
+    // make a thread that will handle recieving and displaying messages while this function handles writting messages
+    
     
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
@@ -250,18 +252,11 @@ void Client::processTimeline()
 }
 
 enum IStatus parse_response(Reply& reply){
-    switch(reply.msg()[0]){
-        case 'S':
-            return SUCCESS;
-        case 'A':
-            return FAILURE_ALREADY_EXISTS;
-        case 'N':
-            return FAILURE_NOT_EXISTS;
-        case 'I':
-            return FAILURE_INVALID_USERNAME;
-        case 'F':
-            return FAILURE_INVALID;
-        case 'U':
-            return FAILURE_UNKNOWN;
-    }
+    // the reply message are the same as the status codes
+    std::string message = reply.msg();
+    IStatus status;
+    status = (message == "SUCCESS") ? SUCCESS : (message == "FAILURE_ALREADY_EXISTS") ? FAILURE_ALREADY_EXISTS : 
+    (message == "FAILURE_NOT_EXISTS") ? FAILURE_NOT_EXISTS : (message == "FAILURE_INVALID_USERNAME") ? FAILURE_INVALID_USERNAME : 
+    (message == "FAILURE_INVALID") ? FAILURE_INVALID : FAILURE_UNKNOWN;
+    return status;
 }

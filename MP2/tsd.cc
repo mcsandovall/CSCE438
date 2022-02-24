@@ -49,7 +49,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username = request->username();
     User * usr = findUser(username, &current_db);
     if(!usr){ // user doesnt exist for wtv reasosn
-      reply->set_msg("SERVER: ERROR USER DOESNT EXIST");
+      reply->set_msg("ERROR USER DOESNT EXIST");
       return Status::CANCELLED;
     }
     
@@ -63,6 +63,7 @@ class SNSServiceImpl final : public SNSService::Service {
       reply->add_following_users(follower);
     }
     
+    reply->set_msg("SUCCESS");
     return Status::OK;
   }
 
@@ -77,7 +78,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username = request->username();
     User * usr = findUser(username, &current_db);
     if(!usr){
-      reply->set_msg("SERVER: ERROR_USER_DOESNT_EXIST");
+      reply->set_msg("ERROR_USER_DOESNT_EXIST");
       return Status::CANCELLED;
     }
     
@@ -85,26 +86,26 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string f_username = request->arguments(0);
     User * followee = findUser(f_username, &current_db);
     if(!followee){ // user does not exist
-      reply->set_msg("SERVER: FAILURE_INVALID_USERNAME");
+      reply->set_msg("FAILURE_INVALID_USERNAME");
       return Status::OK;
     }
     
     // follow the user
     std::string UStatus = usr->follow_user(f_username);
     if(UStatus != "SUCCESS"){
-      reply->set_msg("SERVER: " + UStatus);
+      reply->set_msg(UStatus);
       return Status::OK;
     }
     
     // add current as a follower for the other user
     std::string FStatus = followee->add_follower(username);
     if(FStatus != "SUCCESS"){
-      reply->set_msg("SERVER: " + FStatus);
+      reply->set_msg(FStatus);
       return Status::OK;
     }
     
     // success the process was completed
-    reply->set_msg("SERVER" + UStatus);
+    reply->set_msg(UStatus);
     return Status::OK; 
   }
 
@@ -119,7 +120,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string current_username = request->username();
     User * c_usr = findUser(current_username, &current_db);
     if(!c_usr){
-      reply->set_msg("SERVER: ERROR_USER_DOESNT_EXIST");
+      reply->set_msg("ERROR_USER_DOESNT_EXIST");
       return Status::CANCELLED;
     }
     
@@ -127,7 +128,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string other_user = request->arguments(0);
     User * o_usr = findUser(other_user, &current_db);
     if(!o_usr){ // other user doesnt exist
-      reply->set_msg("SERVER: FAILURE_INVALID_USERNAME");
+      reply->set_msg("FAILURE_INVALID_USERNAME");
       return Status::OK;
     }
     
@@ -141,11 +142,11 @@ class SNSServiceImpl final : public SNSService::Service {
     // remove current user from other following list
     std::string o_status = o_usr->remove_follower(current_username);
     if(o_status != "SUCCESS"){
-      reply->set_msg("SERVER: " + o_status);
+      reply->set_msg(o_status);
       return Status::OK;
     }
     
-    reply->set_msg("SERVER: " + c_status);
+    reply->set_msg(c_status);
     return Status::OK;
   }
   
@@ -175,7 +176,7 @@ class SNSServiceImpl final : public SNSService::Service {
         current_db.push_back(*(c_usr));
       }
     }
-    
+    reply->set_msg("SUCCESS");
     return Status::OK;
   }
 
@@ -229,11 +230,12 @@ void RunServer(std::string port_no) {
   SNSServiceImpl service;
   
   // populate the server databse
+  std::string server_address("127.0.0.1:" + port_no);
   std::string db = getDbFileContent(DB_PATH);
   ParseDB(db, &user_db);
   
   ServerBuilder builder;
-  builder.AddListeningPort(port_no, grpc::InsecureServerCredentials());
+  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
   std::cout << "Server listening on " << port_no << std::endl;
