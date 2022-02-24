@@ -386,3 +386,19 @@ void getRecentPosts(User * usr, std::vector<User> * db){
         usr->add_unseenPost(all_post[index]);
     }
 }
+
+std::vector<User> merge_vectors(std::vector<User> *current_db, std::vector<User> *global_db){
+    std::vector<User> all_users;
+    User * user;
+    // check the global db and see if the user exist
+    for(User usr :  (*global_db)){
+        std::string u_name = usr.get_username();
+        if((user = findUser(u_name, current_db)) != nullptr){
+            // the user exist in both, get current since its most recent
+            all_users.push_back(*user);
+        }else{// else the user doesnt exist in the current, thus add it from the current user
+            all_users.push_back(usr);
+        }
+    }
+    return all_users;
+}

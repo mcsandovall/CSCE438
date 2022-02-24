@@ -266,6 +266,7 @@ int main(int argc, char** argv) {
 
 void termination_handler(int sig){
   // in case of the server failure or interruption write everything to the db file
-  UpdateFileContent(current_db);
+  std::vector<User> all_users(merge_vectors(&current_db, &user_db));
+  UpdateFileContent(all_users);
   exit(1);
 }
