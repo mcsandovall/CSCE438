@@ -162,7 +162,7 @@ class SNSServiceImpl final : public SNSService::Service {
     // check if user already exist
     std::string c_username = request->username();
     User * c_usr = findUser(c_username, &current_db);
-    
+    std::cout << c_username << " starting connection..." << std::endl;
     // if the user exist load their post
     if(c_usr){
       loadPosts(c_usr);
@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
 
 void termination_handler(int sig){
   // in case of the server failure or interruption write everything to the db file
-  std::vector<User> all_users(merge_vectors(&current_db, &user_db));
-  UpdateFileContent(all_users);
+  //std::vector<User> all_users(merge_vectors(&current_db, &user_db));
+  UpdateFileContent(current_db);
   exit(1);
 }

@@ -79,13 +79,13 @@ class User{
         std::vector<Message> * getPosts(){return &posts;}
         std::vector<Message> * getUnseenPosts(){return &unseen_post;}
         bool SeenTimeLine(){return seenTimeline == true;}
+        bool seenTimeline = false;
     private:
         std::string username;
         std::vector<std::string> list_followers;
         std::vector<std::string> following_list;
         std::vector<Message> posts;
         std::vector<Message> unseen_post;
-        bool seenTimeline = false;
 };
 
 // function to get the content of the file
@@ -283,6 +283,11 @@ void loadPosts(User * usr){
     std::ifstream post_file(usr->get_username() + ".txt");
     if(!post_file.is_open()){
         std::cout << "Error opening " << usr->get_username() << " file " << std::endl;
+        return;
+    }
+    
+    // check if the file is empty
+    if(post_file.peek() == std::ifstream::traits_type::eof()){
         return;
     }
     
