@@ -294,5 +294,8 @@ enum IStatus parse_response(Reply& reply){
 }
 
 void termination_handler(int sig){
+    if(!inTimeline){ // quit the program if not in timeline
+        exit(1);
+    }
     inTimeline = false;
 }
