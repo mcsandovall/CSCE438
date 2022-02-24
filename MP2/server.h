@@ -24,7 +24,7 @@ class User{
     public:
     
         User(std::string _un) : username(_un){
-            following_list.push_back(_un);
+            list_followers.push_back(_un);
         }
         User(){} // does nothing but start the array
         std::string add_follower(std::string _username){
