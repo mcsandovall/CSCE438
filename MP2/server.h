@@ -276,23 +276,23 @@ User * findUser(std::string &username, std::vector<User> * db){ // find the user
     return nullptr; // return nullptr user not found
 }
 
-void loadPosts(User * usr){
-    if(!usr){return;}
-    
+void loadPosts(std::string &c_username, std::vector<Message> * db){
+    if(c_username.size() == 0){return;}
     // check if the file exist
-    std::ifstream post_file(usr->get_username() + ".txt");
+    std::ifstream post_file(c_username + ".txt");
     if(!post_file.is_open()){
-        std::cout << "Error opening " << usr->get_username() << " file " << std::endl;
+        std::cout << "Error opening " << c_username << " file " << std::endl;
         return;
     }
     
     // check if the file is empty
     if(post_file.peek() == std::ifstream::traits_type::eof()){
+        post_file.close();
         return;
     }
     
     // add all the post into the post array
-    usr->getPosts()->clear();
+    db->clear();
     std::string post;
     std::vector<std::string> file_posts;
     while(!post_file.eof()){
@@ -313,14 +313,15 @@ void loadPosts(User * usr){
     // load the most recent 20 post always
     for(i; i < file_posts.size();++i){
         if(i == 20){break;}
-        msg.set_username(usr->get_username());
-        while(file_posts[i].at(++space) != ' '){}
-        message = file_posts[i].substr(0, space);
+        msg.set_username(c_username);
+        while(file_posts[i].at(++space) != '-'){}
+        message = file_posts[i].substr(0, space-1);
         msg.set_msg(message);
         tm = file_posts[i].substr(space+1,file_posts[i].size());
         google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
         msg.set_allocated_timestamp(&tmsp);
-        usr->make_post(msg);
+        db->push_back(msg);
+        msg.release_timestamp();
     }
 }
 
@@ -366,17 +367,14 @@ void QuickSort(std::vector<Message> &arr, int start, int end){
     QuickSort(arr,p+1,end);
 }
 // get the recent post from all the followees
-void getRecentPosts(User * usr, std::vector<User> * db){
+void getRecentPosts(User * usr){
     // get the 20 most recent post from the users following
     // them inlcuded
+    
+    // get it from their files
     std::vector<Message> all_post;
-    User * current_user;
-    for(std::string c_usr : usr->getFollowingList()){
-        current_user = findUser(c_usr, db);
-        // get all their post into the vector
-        for(Message post : (*current_user->getPosts())){
-            all_post.push_back(post);
-        }
+    for(std::string followed : usr->getFollowingList()){
+        loadPosts(followed, &all_post);
     }
     
     // sort the vector with respect to the time

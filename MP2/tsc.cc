@@ -244,6 +244,20 @@ void Client::processTimeline()
     ClientContext context;
     std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
     
+    // make both of them threads
+    std::thread reader([stream]{
+        Message msg;
+        time_t utc;
+        while(inTimeline){
+            stream->Read(&msg);
+            std::cout << " got the message " << std::endl;
+            utc = google::protobuf::util::TimeUtil::TimestampToTimeT(msg.timestamp());
+            displayPostMessage(msg.username(), msg.msg(), utc);
+        }
+    });
+    
+    reader.join();
+    
     std::thread writer([stream, this]{
         Message message;
         message.set_username(username);
@@ -261,14 +275,7 @@ void Client::processTimeline()
     });
     
     writer.join();
-    Message msg;
-    time_t utc;
-    while(inTimeline){
-        stream->Read(&msg);
-        utc = google::protobuf::util::TimeUtil::TimestampToTimeT(msg.timestamp());
-        displayPostMessage(msg.username(), msg.msg(), utc);
-    }
-    stream->Finish();
+    //stream->Finish();
     exit(1);
     // end the client
     // ------------------------------------------------------------

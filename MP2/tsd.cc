@@ -165,7 +165,8 @@ class SNSServiceImpl final : public SNSService::Service {
     std::cout << c_username << " starting connection..." << std::endl;
     // if the user exist load their post
     if(c_usr){
-      loadPosts(c_usr);
+      getRecentPosts(c_usr);
+      std::cout << c_usr->getUnseenPosts()->size() << std::endl;
     }else{// if user doesnt exist in current db check the global db
       c_usr = findUser(c_username, &user_db);
       if(!c_usr){// user doesnt exist create new user and add it to the database and create a file for their post
@@ -174,7 +175,7 @@ class SNSServiceImpl final : public SNSService::Service {
         std::ofstream post_file(c_username + ".txt");
         post_file.close();
       }else{ // user exist in global db load their post and add it to the current db
-        loadPosts(c_usr);
+        getRecentPosts(c_usr);
         current_db.push_back(*(c_usr));
       }
     }
@@ -192,24 +193,35 @@ class SNSServiceImpl final : public SNSService::Service {
     Message message;
     std::string c_username;
     std::string msg;
-    User * usr = nullptr;
-    std::ofstream ofs(c_username +".txt");
-    
-    User * flwr;
+    User * usr = nullptr, * flwr;
     while(stream->Read(&message)){
       if(!usr){ // only on the first message in order to declare all the neeede variables
         c_username = message.username();
         usr = findUser(c_username, &current_db);
+        
+        // send the first 20 messages to the client
+        for(int i = 0; i < usr->getUnseenPosts()->size();++i){
+          if(i==20)break;
+          stream->Write(usr->getUnseenPosts()->back());
+          usr->getUnseenPosts()->pop_back();
+        }
+      }
+      // send the remaining messages
+      for(int i = 0; i < usr->getUnseenPosts()->size();++i){
+        stream->Write(usr->getUnseenPosts()->back());
+        usr->getUnseenPosts()->pop_back();
       }
       // add message to all followers unseen post
       for(std::string follower : usr->getListOfFollwers()){
+        if(follower == c_username)continue; // do not send it to yourself
         flwr = findUser(follower, &current_db);
         flwr->add_unseenPost(message);
       }
       // add it to the file of post they made
-      ofs << message.msg() + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n";
+      std::ofstream ofs(c_username + ".txt", std::ios::app);
+      ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
+      ofs.close();
     }
-    ofs.close();
     return Status::OK;
   }
 
