@@ -2,7 +2,7 @@
 
 #include <google/protobuf/timestamp.pb.h>
 #include <google/protobuf/duration.pb.h>
-
+#include <thread>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -189,36 +189,27 @@ class SNSServiceImpl final : public SNSService::Service {
     // and then making it available on his/her follower's streams
     // ------------------------------------------------------------
     
+    Message message;
     std::string c_username;
-    User * usr, * flwr;
-    Message msg, unseen_post;
-    while (stream->Read(&msg)){
-      c_username = msg.username();
-      usr = findUser(c_username, &current_db);
-      if(!usr->SeenTimeLine()){
-        // add the 20 messages to their unseen queue
-        getRecentPosts(usr, &current_db);
-        usr->seenTimeline = true;
+    std::string msg;
+    User * usr = nullptr;
+    std::ofstream ofs(c_username +".txt");
+    
+    User * flwr;
+    while(stream->Read(&message)){
+      if(!usr){ // only on the first message in order to declare all the neeede variables
+        c_username = message.username();
+        usr = findUser(c_username, &current_db);
       }
-      //else pop from their unseen post
-      while(usr->getUnseenPosts()->size() != 0){
-        unseen_post = usr->getUnseenPosts()->back();
-        usr->getUnseenPosts()->pop_back();
-        stream->Write(unseen_post);
-      }
-      
-      //add your post to all your followers unseen post
+      // add message to all followers unseen post
       for(std::string follower : usr->getListOfFollwers()){
         flwr = findUser(follower, &current_db);
-        flwr->add_unseenPost(msg);
+        flwr->add_unseenPost(message);
       }
-      
-      // log the message into the user file and add it to your post vector
-      usr->getPosts()->push_back(msg);
-      std::ofstream ofs(c_username + ".txt");
-      ofs << msg.msg() + google::protobuf::util::TimeUtil::ToString(msg.timestamp());
-      ofs.close();
+      // add it to the file of post they made
+      ofs << message.msg() + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n";
     }
+    ofs.close();
     return Status::OK;
   }
 

@@ -242,36 +242,34 @@ void Client::processTimeline()
 	// ------------------------------------------------------------
     
     ClientContext context;
-    std::shared_ptr<ClientReaderWriter<Message, Message >> stream(_stub->Timeline(&context));
+    std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
     
-    // make a lambda function to handle the upcomming request and read them 
-    std::thread reader([stream](){
-       Message message;
-       while(stream->Read(&message)){
-           // read the message into the built in function 
-           time_t utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
-           displayPostMessage(message.username(),message.msg(),utc);
-       }
+    std::thread writer([stream, this]{
+        Message message;
+        message.set_username(username);
+        Timestamp timestamp;
+        std::string mssg;
+        while(inTimeline){
+            mssg = getPostMessage(); mssg[mssg.size()-1] = ' ';
+            message.set_msg(mssg);
+            timestamp = google::protobuf::util::TimeUtil::GetCurrentTime();
+            message.set_allocated_timestamp(&timestamp);
+            stream->Write(message);
+            message.release_timestamp();
+        }
+        stream->WritesDone();
     });
     
-    // join the thread
-    reader.join();
-    
-    // write post to the server
-    Message message;
-    Timestamp tmsp;
-    while(inTimeline){ // until the user makes a ctrl^c
-        message.set_username(username);
-        message.set_msg(getPostMessage());
-        Timestamp tmsp(google::protobuf::util::TimeUtil::GetCurrentTime());
-        message.set_allocated_timestamp(&tmsp);
-        // send message
-        stream->Write(message);
+    writer.join();
+    Message msg;
+    time_t utc;
+    while(inTimeline){
+        stream->Read(&msg);
+        utc = google::protobuf::util::TimeUtil::TimestampToTimeT(msg.timestamp());
+        displayPostMessage(msg.username(), msg.msg(), utc);
     }
-    // if the process ends
-    stream->WritesDone();
     stream->Finish();
-    exit(1); // end the client process
+    exit(1);
     // end the client
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
