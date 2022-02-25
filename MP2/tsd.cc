@@ -193,7 +193,12 @@ class SNSServiceImpl final : public SNSService::Service {
     Message message;
     std::string c_username;
     std::string msg;
-    User * usr = nullptr, * flwr;
+    User * usr = nullptr, * flwr;  
+    // get the username from the metadata
+    // std::multimap<grpc::string_ref, grpc::string_ref> metadata = context->client_metadata();
+    // c_username = metadata.find("username")->second.data();
+    // usr = findUser(c_username, &current_db);
+    
     while(stream->Read(&message)){
       if(!usr){ // only on the first message in order to declare all the neeede variables
         c_username = message.username();

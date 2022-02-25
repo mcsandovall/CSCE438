@@ -241,7 +241,12 @@ void Client::processTimeline()
     // You should use them as you did in hw1.
 	// ------------------------------------------------------------
     
+    // ClientContext context;
+    // //context.AddMetadata("username",username);
+    // std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
+    
     ClientContext context;
+    context.AddMetadata("username",username);
     std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
     
     // make both of them threads
@@ -250,7 +255,6 @@ void Client::processTimeline()
         time_t utc;
         while(inTimeline){
             stream->Read(&msg);
-            std::cout << " got the message " << std::endl;
             utc = google::protobuf::util::TimeUtil::TimestampToTimeT(msg.timestamp());
             displayPostMessage(msg.username(), msg.msg(), utc);
         }
@@ -274,7 +278,9 @@ void Client::processTimeline()
         stream->WritesDone();
     });
     
+    //reader.join();
     writer.join();
+    //reader.join();
     //stream->Finish();
     exit(1);
     // end the client
