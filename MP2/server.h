@@ -14,7 +14,6 @@
 
 using csce438::Message;
 using google::protobuf::Timestamp;
-using grpc::ServerWriter;
 
 /**
  * This is where i will define the datastructure and parser needed for the database
@@ -291,38 +290,25 @@ void loadPosts(std::string &c_username, std::vector<Message> * db){
         return;
     }
     
-    // add all the post into the post array
-    db->clear();
-    std::string post;
-    std::vector<std::string> file_posts;
-    while(!post_file.eof()){
-        post_file >> post;
-        file_posts.push_back(post);
-    }
-    post_file.close();
-    
-    // make the message out of the posts and add them to post from the user
     Message msg;
-    int space = 0;
-    std::string message;
-    std::string tm;
+    int index = 0, count =0;
+    std::string message, tm;
     Timestamp tmsp;
-    int i = file_posts.size() - 21;
-    if(i < 0){i = 0;}
-    
-    // load the most recent 20 post always
-    for(i; i < file_posts.size();++i){
-        if(i == 20){break;}
+    while(!post_file.eof() && count < 20){
+        std::getline(post_file, post);
+        if(post.empty())continue;
+        // get the information from the file and append it to the db
         msg.set_username(c_username);
-        while(file_posts[i].at(++space) != '-'){}
-        message = file_posts[i].substr(0, space-1);
+        while(post[++index] != '-');
+        message = post.substr(0, index-1);
         msg.set_msg(message);
-        tm = file_posts[i].substr(space+1,file_posts[i].size());
+        tm = posts.substr(index+1, posts.size() -index);
         google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
         msg.set_allocated_timestamp(&tmsp);
         db->push_back(msg);
         msg.release_timestamp();
     }
+    post_file.close();
 }
 
 // quicksort to sort out the messages from the user 
@@ -371,10 +357,10 @@ void getRecentPosts(User * usr){
     // get the 20 most recent post from the users following
     // them inlcuded
     
-    // get it from their files
-    std::vector<Message> all_post;
+    // at most 20 post from people they follow and add it to a vector
+    std::vector<Message> * all_post;
     for(std::string followed : usr->getFollowingList()){
-        loadPosts(followed, &all_post);
+        loadPosts(followed, all_post);
     }
     
     // sort the vector with respect to the time
