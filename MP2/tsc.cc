@@ -246,40 +246,37 @@ void Client::processTimeline()
     // std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
     
     ClientContext context;
-    context.AddMetadata("username",username);
     std::shared_ptr<ClientReaderWriter<Message, Message> > stream(_stub->Timeline(&context));
+    
+    // send and initial username in order to get the name from the quest
+    Message message;
+    message.set_username(username);
+    stream->Write(message);
     
     // make both of them threads
     std::thread reader([stream]{
         Message msg;
         time_t utc;
-        while(inTimeline){
-            stream->Read(&msg);
+        while(stream->Read(&msg)){
             utc = google::protobuf::util::TimeUtil::TimestampToTimeT(msg.timestamp());
             displayPostMessage(msg.username(), msg.msg(), utc);
         }
     });
     
-    reader.join();
+    reader.detach();
     
-    std::thread writer([stream, this]{
-        Message message;
-        message.set_username(username);
-        Timestamp timestamp;
-        std::string mssg;
-        while(inTimeline){
-            mssg = getPostMessage(); mssg[mssg.size()-1] = ' ';
-            message.set_msg(mssg);
-            timestamp = google::protobuf::util::TimeUtil::GetCurrentTime();
-            message.set_allocated_timestamp(&timestamp);
-            stream->Write(message);
-            message.release_timestamp();
-        }
-        stream->WritesDone();
-    });
+    Timestamp timestamp;
+    std::string mssg;
+    while(inTimeline){
+        mssg = getPostMessage(); mssg[mssg.size()-1] = ' ';
+        message.set_msg(mssg);
+        timestamp = google::protobuf::util::TimeUtil::GetCurrentTime();
+        message.set_allocated_timestamp(&timestamp);
+        stream->Write(message);
+        message.release_timestamp();
+    }
+    stream->WritesDone();
     
-    //reader.join();
-    writer.join();
     //reader.join();
     //stream->Finish();
     exit(1);

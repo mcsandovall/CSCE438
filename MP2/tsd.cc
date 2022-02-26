@@ -32,11 +32,10 @@ using csce438::SNSService;
 
 #define DB_PATH "user_db.json"
 
+void termination_handler(int sig);
 // use vector for the database
 std::vector<User> user_db;
-std::vector<User> current_db;
-
-void termination_handler(int sig);
+std::vector<User*> current_db;
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -49,15 +48,15 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // find the user in the current db
     std::string username = request->username();
-    User * usr = findUser(username, &current_db);
+    User * usr = findUser(username, current_db);
     if(!usr){ // user doesnt exist for wtv reasosn
       reply->set_msg("ERROR USER DOESNT EXIST");
       return Status::CANCELLED;
     }
     
     // get the names of all the current users 
-    for(User usr : current_db){
-      reply->add_all_users(usr.get_username());
+    for(User * usr : current_db){
+      reply->add_all_users(usr->get_username());
     }
     
     // get the list of users following the current users
@@ -78,7 +77,7 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // get the current user
     std::string username = request->username();
-    User * usr = findUser(username, &current_db);
+    User * usr = findUser(username, current_db);
     if(!usr){
       reply->set_msg("ERROR_USER_DOESNT_EXIST");
       return Status::CANCELLED;
@@ -86,7 +85,7 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // find the user to follow
     std::string f_username = request->arguments(0);
-    User * followee = findUser(f_username, &current_db);
+    User * followee = findUser(f_username, current_db);
     if(!followee){ // user does not exist
       reply->set_msg("FAILURE_INVALID_USERNAME");
       return Status::OK;
@@ -120,7 +119,7 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // get current user
     std::string current_username = request->username();
-    User * c_usr = findUser(current_username, &current_db);
+    User * c_usr = findUser(current_username, current_db);
     if(!c_usr){
       reply->set_msg("ERROR_USER_DOESNT_EXIST");
       return Status::CANCELLED;
@@ -128,7 +127,7 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // get the user to unfollow
     std::string other_user = request->arguments(0);
-    User * o_usr = findUser(other_user, &current_db);
+    User * o_usr = findUser(other_user, current_db);
     if(!o_usr){ // other user doesnt exist
       reply->set_msg("FAILURE_INVALID_USERNAME");
       return Status::OK;
@@ -161,24 +160,15 @@ class SNSServiceImpl final : public SNSService::Service {
     
     // check if user already exist
     std::string c_username = request->username();
-    User * c_usr = findUser(c_username, &current_db);
+    User * c_usr = findUser(c_username, current_db);
     std::cout << c_username << " starting connection..." << std::endl;
-    // if the user exist load their post
-    if(c_usr){
-      getRecentPosts(c_usr);
-      std::cout << c_usr->getUnseenPosts()->size() << std::endl;
-    }else{// if user doesnt exist in current db check the global db
-      c_usr = findUser(c_username, &user_db);
-      if(!c_usr){// user doesnt exist create new user and add it to the database and create a file for their post
-        User c_usr(c_username);
-        current_db.push_back(c_usr);
-        std::ofstream post_file(c_username + ".txt");
-        post_file.close();
-      }else{ // user exist in global db load their post and add it to the current db
-        getRecentPosts(c_usr);
-        current_db.push_back(*(c_usr));
-      }
+    if(!c_usr){
+      current_db.push_back(new User(c_username));
+      std::ofstream ofs(c_username + ".txt");
+      ofs.close();
     }
+    
+    std::cout << c_username << " sucesfully connected ..." << std::endl;
     reply->set_msg("SUCCESS");
     return Status::OK;
   }
@@ -193,43 +183,46 @@ class SNSServiceImpl final : public SNSService::Service {
     Message message;
     std::string c_username;
     std::string msg;
-    User * usr = nullptr, * flwr;  
-    // get the username from the metadata
-    // std::multimap<grpc::string_ref, grpc::string_ref> metadata = context->client_metadata();
-    // c_username = metadata.find("username")->second.data();
-    // usr = findUser(c_username, &current_db);
+    User * usr = nullptr;
     
-    while(stream->Read(&message)){
-      if(!usr){ // only on the first message in order to declare all the neeede variables
-        c_username = message.username();
-        usr = findUser(c_username, &current_db);
-        
-        // send the first 20 messages to the client
-        for(int i = 0; i < usr->getUnseenPosts()->size();++i){
-          if(i==20)break;
-          stream->Write(usr->getUnseenPosts()->back());
-          usr->getUnseenPosts()->pop_back();
-        }
-      }
-      // send the remaining messages
-      for(int i = 0; i < usr->getUnseenPosts()->size();++i){
+    // get an inital command for the username
+    if(stream->Read(&message)){
+      c_username = message.username();
+    }
+    
+    usr = findUser(c_username, current_db);
+    
+    std::thread writer([stream](User * usr){
+      while(true){
+        if(usr->getUnseenPosts()->size() == 0) continue;
         stream->Write(usr->getUnseenPosts()->back());
         usr->getUnseenPosts()->pop_back();
       }
-      // add message to all followers unseen post
-      for(std::string follower : usr->getListOfFollwers()){
-        if(follower == c_username)continue; // do not send it to yourself
-        flwr = findUser(follower, &current_db);
-        flwr->add_unseenPost(message);
+    }, usr);
+    
+    std::thread reader([stream](User * usr){
+      Message message;
+      User * flwr;
+      while(stream->Read(&message)){
+        // Add the post to all the followers list
+        for(std::string follower : usr->getListOfFollwers()){
+          if(follower == usr->get_username())continue; // do not send it to yourself
+          flwr = findUser(follower, &current_db);
+          if(!flwr)continue;
+          flwr->add_unseenPost(message);
+        }
+        // add it to the file of post they made
+        std::ofstream ofs(usr->get_username() + ".txt", std::ios::app);
+        ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
+        ofs.close();
       }
-      // add it to the file of post they made
-      std::ofstream ofs(c_username + ".txt", std::ios::app);
-      ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
-      ofs.close();
-    }
+    }, usr);
+    
+    writer.detach();
+    reader.join();
+    
     return Status::OK;
   }
-
 };
 
 void RunServer(std::string port_no) {

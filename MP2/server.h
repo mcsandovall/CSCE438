@@ -77,8 +77,7 @@ class User{
         std::vector<std::string> getListOfFollwers(){return list_followers;}
         std::vector<Message> * getPosts(){return &posts;}
         std::vector<Message> * getUnseenPosts(){return &unseen_post;}
-        bool SeenTimeLine(){return seenTimeline == true;}
-        bool seenTimeline = false;
+        bool inTimeline = true;
     private:
         std::string username;
         std::vector<std::string> list_followers;
@@ -214,7 +213,7 @@ void ParseDB(std::string &db, std::vector<User> * _user_db){
     }
 }
 
-void UpdateFileContent(std::vector<User> &user_db){
+void UpdateFileContent(std::vector<User*> &user_db){
     if(user_db.size() == 0){return;}
     // this function will update the content of the file after the server was active
     std::ofstream db_file("user_db.json");
@@ -229,12 +228,12 @@ void UpdateFileContent(std::vector<User> &user_db){
         for(int i = 0; i < 4; ++i){
             file_content += " ";
         }
-        file_content += "\"username\" : \"" + user_db[i].get_username() + "\",\n";
+        file_content += "\"username\" : \"" + user_db[i]->get_username() + "\",\n";
         for(int i = 0; i < 4; ++i){
             file_content += " ";
         }
         file_content += "\"following_list\" : [";
-        std::vector<std::string> following_list = user_db[i].getFollowingList();
+        std::vector<std::string> following_list = user_db[i]->getFollowingList();
         for(int i = 0; i < following_list.size(); ++i){
             file_content += "\"" + following_list[i] + "\"";
             if(i != (following_list.size()-1)){
@@ -246,7 +245,7 @@ void UpdateFileContent(std::vector<User> &user_db){
             file_content += " ";
         }
         file_content += "\"list_followers\" : [";
-        std::vector<std::string> list_following = user_db[i].getListOfFollwers();
+        std::vector<std::string> list_following = user_db[i]->getListOfFollwers();
         for(int i = 0; i < list_following.size(); ++i){
             file_content += "\"" + list_following[i] + "\"";
             if(i != (list_following.size()-1)){
@@ -264,12 +263,12 @@ void UpdateFileContent(std::vector<User> &user_db){
     db_file.close();
 }
 
-User * findUser(std::string &username, std::vector<User> * db){ // find the user in the dabatase
-    if(db->size() == 0){return nullptr;}
-    
-    for(int i = 0; i < db->size();++i){
-        if(username == db->at(i).get_username()){
-            return &(db->at(i));
+User * findUser(std::string &username, std::vector<User*> &db){ // find the user in the dabatase
+    if(db.size() == 0){return nullptr;}
+    std::cout << db.size() << std::endl;
+    for(User * usr : db){
+        if(usr->get_username() == username){
+            return usr;
         }
     }
     return nullptr; // return nullptr user not found
@@ -292,7 +291,7 @@ void loadPosts(std::string &c_username, std::vector<Message> * db){
     
     Message msg;
     int index = 0, count =0;
-    std::string message, tm;
+    std::string message, tm, post;
     Timestamp tmsp;
     while(!post_file.eof() && count < 20){
         std::getline(post_file, post);
@@ -302,7 +301,7 @@ void loadPosts(std::string &c_username, std::vector<Message> * db){
         while(post[++index] != '-');
         message = post.substr(0, index-1);
         msg.set_msg(message);
-        tm = posts.substr(index+1, posts.size() -index);
+        tm = post.substr(index+1, post.size() -index);
         google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
         msg.set_allocated_timestamp(&tmsp);
         db->push_back(msg);
@@ -364,23 +363,23 @@ void getRecentPosts(User * usr){
     }
     
     // sort the vector with respect to the time
-    QuickSort(all_post,0, all_post.size()-1);
+    QuickSort(*all_post,0, all_post->size()-1);
     
     // add unseen post to the user unseen post vector, with index 20 being most recent
     usr->getUnseenPosts()->clear();
-    int index = all_post.size() - 21;
+    int index = all_post->size() - 21;
     if(index < 0){index = 0;}
     
-    for(index; index < all_post.size(); ++index){
-        usr->add_unseenPost(all_post[index]);
+    for(index; index < all_post->size(); ++index){
+        usr->add_unseenPost(all_post->at(index));
     }
 }
 
-std::vector<User> merge_vectors(std::vector<User> *current_db, std::vector<User> *global_db){
+std::vector<User> merge_vectors(std::vector<User*> &current_db, std::vector<User> &global_db){
     std::vector<User> all_users;
     User * user;
     // check the global db and see if the user exist
-    for(User usr :  (*global_db)){
+    for(User usr :  global_db){
         std::string u_name = usr.get_username();
         if((user = findUser(u_name, current_db)) != nullptr){
             // the user exist in both, get current since its most recent
