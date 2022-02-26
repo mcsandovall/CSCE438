@@ -35,7 +35,7 @@ using csce438::SNSService;
 void termination_handler(int sig);
 // use vector for the database
 std::vector<User> user_db;
-std::vector<User*> current_db;
+std::vector<User> current_db;
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -55,8 +55,8 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     
     // get the names of all the current users 
-    for(User * usr : current_db){
-      reply->add_all_users(usr->get_username());
+    for(User usr : current_db){
+      reply->add_all_users(usr.get_username());
     }
     
     // get the list of users following the current users
@@ -161,14 +161,24 @@ class SNSServiceImpl final : public SNSService::Service {
     // check if user already exist
     std::string c_username = request->username();
     User * c_usr = findUser(c_username, current_db);
-    std::cout << c_username << " starting connection..." << std::endl;
     if(!c_usr){
-      current_db.push_back(new User(c_username));
-      std::ofstream ofs(c_username + ".txt");
-      ofs.close();
+      // look for it in the global db
+      c_usr = findUser(c_username, user_db);
+      if(!c_usr){ // if not in either crete a new one
+        current_db.push_back(User(c_username));
+        std::ofstream ofs(c_username + ".txt");
+        ofs.close();
+        std::cout << c_username << " sucesfully connected ..." << std::endl;
+      }
     }
     
-    std::cout << c_username << " sucesfully connected ..." << std::endl;
+    if(c_usr){
+      for(std::string followed :  c_usr->getFollowingList()){ // get all the post from followed user
+        loadPosts(followed, c_usr->getUnseenPosts());
+      }
+      std::cout << c_username << " sucesfully re-connected ..." << c_usr->getUnseenPosts()->size() << std::endl;
+    }
+    
     reply->set_msg("SUCCESS");
     return Status::OK;
   }
@@ -178,7 +188,7 @@ class SNSServiceImpl final : public SNSService::Service {
     // In this function, you are to write code that handles 
     // receiving a message/post from a user, recording it in a file
     // and then making it available on his/her follower's streams
-    // ------------------------------------------------------------
+    // -----------------------------------------------------------
     
     Message message;
     std::string c_username;
@@ -200,14 +210,14 @@ class SNSServiceImpl final : public SNSService::Service {
       }
     }, usr);
     
-    std::thread reader([stream](User * usr){
+      std::thread reader([stream](User * usr){
       Message message;
       User * flwr;
       while(stream->Read(&message)){
         // Add the post to all the followers list
         for(std::string follower : usr->getListOfFollwers()){
           if(follower == usr->get_username())continue; // do not send it to yourself
-          flwr = findUser(follower, &current_db);
+          flwr = findUser(follower, current_db);
           if(!flwr)continue;
           flwr->add_unseenPost(message);
         }
@@ -268,6 +278,7 @@ int main(int argc, char** argv) {
 
 void termination_handler(int sig){
   // in case of the server failure or interruption write everything to the db file
+  
   //std::vector<User> all_users(merge_vectors(&current_db, &user_db));
   UpdateFileContent(current_db);
   exit(1);
