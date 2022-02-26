@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     int opt = 0;
     
     // signal handler
-    signal(SIGINT, termination_handler);
+    //signal(SIGINT, termination_handler);
     
     while ((opt = getopt(argc, argv, "h:u:p:")) != -1){
         switch(opt) {
@@ -277,9 +277,6 @@ void Client::processTimeline()
     }
     stream->WritesDone();
     
-    //reader.join();
-    //stream->Finish();
-    exit(1);
     // end the client
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
@@ -299,11 +296,4 @@ enum IStatus parse_response(Reply& reply){
     (message == "FAILURE_NOT_EXISTS") ? FAILURE_NOT_EXISTS : (message == "FAILURE_INVALID_USERNAME") ? FAILURE_INVALID_USERNAME : 
     (message == "FAILURE_INVALID") ? FAILURE_INVALID : FAILURE_UNKNOWN;
     return status;
-}
-
-void termination_handler(int sig){
-    if(!inTimeline){ // quit the program if not in timeline
-        exit(1);
-    }
-    inTimeline = false;
 }

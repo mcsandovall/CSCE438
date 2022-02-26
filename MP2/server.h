@@ -72,7 +72,10 @@ class User{
         }
         void make_post(Message &_post){posts.push_back(_post);}
         void add_unseenPost(Message &_post){unseen_post.push_back(_post);}
-        void set_username(std::string name){username = name;}
+        void set_username(std::string name){
+            username = name;
+            list_followers.push_back(name), following_list.push_back(name);
+        }
         std::string get_username(){return username;}
         std::vector<std::string> getFollowingList(){return following_list;}
         std::vector<std::string> getListOfFollwers(){return list_followers;}
@@ -296,6 +299,7 @@ void loadPosts(std::string &c_username,std::vector<Message> *db){
         message = post.substr(0, index-1);
         msg.set_msg(message);
         tm = post.substr(index+1, post.size() -index);
+        index = 0;
         google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
         msg.set_allocated_timestamp(&tmsp);
         db->push_back(msg);

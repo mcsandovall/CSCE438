@@ -169,12 +169,40 @@ class SNSServiceImpl final : public SNSService::Service {
         std::ofstream ofs(c_username + ".txt");
         ofs.close();
         std::cout << c_username << " sucesfully connected ..." << std::endl;
+      }else{
+        // if successfully reconected add it to the current db
+        current_db.push_back(*c_usr);
       }
     }
     
     if(c_usr){
       for(std::string followed :  c_usr->getFollowingList()){ // get all the post from followed user
-        loadPosts(followed, c_usr->getUnseenPosts());
+        std::ifstream ifs(followed + ".txt");
+        if(!ifs.is_open())continue;
+        
+        // get all the post in the file
+        Message msg;
+        int index = 0; 
+        std::string post, tm, message;
+        Timestamp timestamp;
+        while(!ifs.eof()){
+          std::getline(ifs,post);
+          if(post.empty())continue;
+          while(post[++index] != '-'){}
+          
+          message = post.substr(0, index-1);
+          tm = post.substr(0, post.size() - index);
+          index = 0; // reset the index
+          
+          msg.set_username(followed);
+          msg.set_msg(message);
+          
+          google::protobuf::util::TimeUtil::FromString(tm, &timestamp);
+          msg.set_allocated_timestamp(&timestamp);
+          
+          c_usr->add_unseenPost(msg);
+          msg.release_timestamp();
+        }
       }
       std::cout << c_username << " sucesfully re-connected ..." << c_usr->getUnseenPosts()->size() << std::endl;
     }
@@ -201,36 +229,33 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     
     usr = findUser(c_username, current_db);
-    
+    usr->inTimeline = true;
     std::thread writer([stream](User * usr){
-      while(true){
+      while(usr->inTimeline){
         if(usr->getUnseenPosts()->size() == 0) continue;
         stream->Write(usr->getUnseenPosts()->back());
         usr->getUnseenPosts()->pop_back();
       }
     }, usr);
     
-      std::thread reader([stream](User * usr){
-      Message message;
-      User * flwr;
-      while(stream->Read(&message)){
-        // Add the post to all the followers list
-        for(std::string follower : usr->getListOfFollwers()){
-          if(follower == usr->get_username())continue; // do not send it to yourself
-          flwr = findUser(follower, current_db);
-          if(!flwr)continue;
-          flwr->add_unseenPost(message);
-        }
-        // add it to the file of post they made
-        std::ofstream ofs(usr->get_username() + ".txt", std::ios::app);
-        ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
-        ofs.close();
-      }
-    }, usr);
     
     writer.detach();
-    reader.join();
     
+    User * flwr;
+    while(stream->Read(&message)){
+      // Add the post to all the followers list
+      for(std::string follower : usr->getListOfFollwers()){
+        if(follower == usr->get_username())continue; // do not send it to yourself
+        flwr = findUser(follower, current_db);
+        if(!flwr)continue;
+        flwr->add_unseenPost(message);
+      }
+      // add it to the file of post they made
+      std::ofstream ofs(usr->get_username() + ".txt", std::ios::app);
+      ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
+      ofs.close();
+    }
+    usr->inTimeline = false;
     return Status::OK;
   }
 };
