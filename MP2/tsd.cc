@@ -15,6 +15,8 @@
 #include "server.h"
 #include <signal.h>
 #include "sns.grpc.pb.h"
+#include <iomanip>
+#include <sstream>
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
@@ -184,6 +186,8 @@ class SNSServiceImpl final : public SNSService::Service {
         Message msg;
         int index = 0; 
         std::string post, tm, message;
+        time_t utc;
+        struct std::tm tim;
         Timestamp timestamp;
         while(!ifs.eof()){
           std::getline(ifs,post);
@@ -191,20 +195,22 @@ class SNSServiceImpl final : public SNSService::Service {
           while(post[++index] != '-'){}
           
           message = post.substr(0, index-1);
-          tm = post.substr(0, post.size() - index);
+          tm = post.substr(index+1, post.size() - index);
           index = 0; // reset the index
           
           msg.set_username(followed);
           msg.set_msg(message);
           
-          google::protobuf::util::TimeUtil::FromString(tm, &timestamp);
+          std::istringstream ss(tm);
+          ss >> std::get_time(&tim, "%a %b %d %H:%M:%S %Y");
+          utc = mktime(&tim);
+          timestamp = google::protobuf::util::TimeUtil::TimeTToTimestamp(utc);
           msg.set_allocated_timestamp(&timestamp);
           
           c_usr->add_unseenPost(msg);
           msg.release_timestamp();
         }
       }
-      std::cout << c_username << " sucesfully re-connected ..." << c_usr->getUnseenPosts()->size() << std::endl;
     }
     
     reply->set_msg("SUCCESS");
@@ -242,6 +248,7 @@ class SNSServiceImpl final : public SNSService::Service {
     writer.detach();
     
     User * flwr;
+    time_t utc;
     while(stream->Read(&message)){
       // Add the post to all the followers list
       for(std::string follower : usr->getListOfFollwers()){
@@ -252,7 +259,8 @@ class SNSServiceImpl final : public SNSService::Service {
       }
       // add it to the file of post they made
       std::ofstream ofs(usr->get_username() + ".txt", std::ios::app);
-      ofs << (message.msg() + "-" + google::protobuf::util::TimeUtil::ToString(message.timestamp()) + "\n");
+      utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
+      ofs << (message.msg() + "-" + std::ctime(&utc));
       ofs.close();
     }
     usr->inTimeline = false;

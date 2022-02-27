@@ -278,35 +278,33 @@ User * findUser(std::string &username, std::vector<User> &db){ // find the user 
     return nullptr; // return nullptr user not found
 }
 
-void loadPosts(std::string &c_username,std::vector<Message> *db){
-    if(c_username.size() == 0){return;}
-    // check if the file exist
-    std::ifstream post_file(c_username + ".txt");
-    if(!post_file.is_open()){
-        std::cout << "Error opening " << c_username << " file " << std::endl;
-        return;
-    }
+void loadPosts(std::string &c_username, User * c_usr){
+  std::ifstream ifs(c_username + ".txt");
+  if(!ifs.is_open())return;
+  
+  // get all the post in the file
+  Message msg;
+  int index = 0; 
+  std::string post, tm, message;
+  Timestamp * timestamp;
+  while(!ifs.eof()){
+    std::getline(ifs,post);
+    if(post.empty())continue;
+    while(post[++index] != '-'){}
     
-    Message msg;
-    int index = 0;
-    std::string message, tm, post;
-    Timestamp tmsp;
-    std::cout << "getting updates from file " << c_username << std::endl;
-    while(!post_file.eof()){
-        std::getline(post_file, post);
-        msg.set_username(c_username);
-        while(post[++index] != '-');
-        message = post.substr(0, index-1);
-        msg.set_msg(message);
-        tm = post.substr(index+1, post.size() -index);
-        index = 0;
-        google::protobuf::util::TimeUtil::FromString(tm, &tmsp);
-        msg.set_allocated_timestamp(&tmsp);
-        db->push_back(msg);
-        msg.release_timestamp();
-    }
-    std::cout << "end of file " << c_username << std::endl;
-    post_file.close();
+    message = post.substr(0, index-1);
+    tm = post.substr(0, post.size() - index);
+    index = 0; // reset the index
+    
+    msg.set_username(c_username);
+    msg.set_msg(message);
+    timestamp = new Timestamp();
+    google::protobuf::util::TimeUtil::FromString(tm, timestamp);
+    msg.set_allocated_timestamp(timestamp);
+    
+    c_usr->add_unseenPost(msg);
+    msg.release_timestamp();
+  }
 }
 
 // quicksort to sort out the messages from the user 
