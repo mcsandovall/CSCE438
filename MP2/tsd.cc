@@ -224,7 +224,7 @@ class SNSServiceImpl final : public SNSService::Service {
     while(stream->Read(&message)){
       // Add the post to all the followers list
       for(std::string follower : usr->getListOfFollwers()){
-        if(follower != usr->get_username()){
+        if(follower != usr->get_username()){ // add the message to followers queue
           flwr = findUser(follower, current_db);
           if(!flwr)continue;
           flwr->add_unseenPost(message);
