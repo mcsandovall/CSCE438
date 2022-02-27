@@ -1,5 +1,5 @@
 #include <ctime>
-
+#include <algorithm>
 #include <google/protobuf/timestamp.pb.h>
 #include <google/protobuf/duration.pb.h>
 #include <thread>
@@ -179,37 +179,10 @@ class SNSServiceImpl final : public SNSService::Service {
     
     if(c_usr){
       for(std::string followed :  c_usr->getFollowingList()){ // get all the post from followed user
-        std::ifstream ifs(followed + ".txt");
-        if(!ifs.is_open())continue;
-        
-        // get all the post in the file
-        Message msg;
-        int index = 0; 
-        std::string post, tm, message;
-        time_t utc;
-        struct std::tm tim;
-        Timestamp timestamp;
-        while(!ifs.eof()){
-          std::getline(ifs,post);
-          if(post.empty())continue;
-          while(post[++index] != '-'){}
-          
-          message = post.substr(0, index-1);
-          tm = post.substr(index+1, post.size() - index);
-          index = 0; // reset the index
-          
-          msg.set_username(followed);
-          msg.set_msg(message);
-          
-          std::istringstream ss(tm);
-          ss >> std::get_time(&tim, "%a %b %d %H:%M:%S %Y");
-          utc = mktime(&tim);
-          timestamp = google::protobuf::util::TimeUtil::TimeTToTimestamp(utc);
-          msg.set_allocated_timestamp(&timestamp);
-          
-          c_usr->add_unseenPost(msg);
-          msg.release_timestamp();
-        }
+        loadPosts(followed, c_usr);
+      }
+      if(c_usr->getUnseenPosts()->size() > 20){
+        c_usr->getUnseenPosts()->erase(c_usr->getUnseenPosts()->begin(),c_usr->getUnseenPosts()->begin() + (c_usr->getUnseenPosts()->size()-20));
       }
     }
     
@@ -312,7 +285,7 @@ int main(int argc, char** argv) {
 void termination_handler(int sig){
   // in case of the server failure or interruption write everything to the db file
   
-  //std::vector<User> all_users(merge_vectors(&current_db, &user_db));
-  UpdateFileContent(current_db);
+  merge_vectors(current_db,user_db);
+  UpdateFileContent(user_db);
   exit(1);
 }

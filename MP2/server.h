@@ -11,6 +11,8 @@
 #include <google/protobuf/duration.pb.h>
 #include "sns.grpc.pb.h"
 #include <grpc++/grpc++.h>
+#include <iomanip>
+#include <sstream>
 
 using csce438::Message;
 using google::protobuf::Timestamp;
@@ -279,111 +281,58 @@ User * findUser(std::string &username, std::vector<User> &db){ // find the user 
 }
 
 void loadPosts(std::string &c_username, User * c_usr){
-  std::ifstream ifs(c_username + ".txt");
-  if(!ifs.is_open())return;
-  
-  // get all the post in the file
-  Message msg;
-  int index = 0; 
-  std::string post, tm, message;
-  Timestamp * timestamp;
-  while(!ifs.eof()){
-    std::getline(ifs,post);
-    if(post.empty())continue;
-    while(post[++index] != '-'){}
+    std::ifstream ifs(c_username + ".txt");
+    if(!ifs.is_open())return;
     
-    message = post.substr(0, index-1);
-    tm = post.substr(0, post.size() - index);
-    index = 0; // reset the index
-    
-    msg.set_username(c_username);
-    msg.set_msg(message);
-    timestamp = new Timestamp();
-    google::protobuf::util::TimeUtil::FromString(tm, timestamp);
-    msg.set_allocated_timestamp(timestamp);
-    
-    c_usr->add_unseenPost(msg);
-    msg.release_timestamp();
-  }
-}
-
-// quicksort to sort out the messages from the user 
-int partition(std::vector<Message> &arr, int start, int end){
-    Timestamp pivot = arr[start].timestamp();
-    
-    int count = 0;
-    for(int i = start+1; i <= end;++i){
-        if(arr[i].timestamp() <= pivot){
-            ++count;
-        }
-    }
-    
-    int pivotIndex = start + count;
-    std::swap(arr[start], arr[pivotIndex]);
-    
-    int i = start, j = end;
-    while(i < pivotIndex && j > pivotIndex){
-        while (arr[i].timestamp() <= pivot) {
-            i++;
-        }
- 
-        while (arr[j].timestamp() > pivot) {
-            j--;
-        }
- 
-        if (i < pivotIndex && j > pivotIndex) {
-            std::swap(arr[i++], arr[j--]);
-        }
-    }
-    return pivotIndex;
-}
-
-void QuickSort(std::vector<Message> &arr, int start, int end){
-    if(start >= end){
-        return;
-    }
-    
-    int p = partition(arr,start,end);
-    
-    QuickSort(arr,start,p-1);
-    QuickSort(arr,p+1,end);
-}
-// get the recent post from all the followees
-void getRecentPosts(User * usr){
-    // get the 20 most recent post from the users following
-    // them inlcuded
-    
-    // at most 20 post from people they follow and add it to a vector
-    std::vector<Message> * all_post;
-    // for(std::string followed : usr->getFollowingList()){
-    //     loadPosts(followed, all_post);
-    // }
-    std::cout << "gets here "<< std::endl;
-    // sort the vector with respect to the time
-    //QuickSort(*all_post,0, all_post->size()-1);
-    
-    // add unseen post to the user unseen post vector, with index 20 being most recent
-    usr->getUnseenPosts()->clear();
-    int index = all_post->size() - 21;
-    if(index < 0){index = 0;}
-    
-    for(index; index < all_post->size(); ++index){
-        usr->add_unseenPost(all_post->at(index));
+    // get all the post in the file
+    Message msg;
+    int index = 0; 
+    std::string post, tm, message;
+    time_t utc;
+    struct std::tm tim;
+    Timestamp timestamp;
+    while(!ifs.eof()){
+      std::getline(ifs,post);
+      if(post.empty())continue;
+      while(post[++index] != '-'){}
+      
+      message = post.substr(0, index-1);
+      tm = post.substr(index+1, post.size() - index);
+      index = 0; // reset the index
+      
+      msg.set_username(c_username);
+      msg.set_msg(message);
+      
+      std::istringstream ss(tm);
+      ss >> std::get_time(&tim, "%a %b %d %H:%M:%S %Y");
+      utc = mktime(&tim);
+      timestamp = google::protobuf::util::TimeUtil::TimeTToTimestamp(utc);
+      msg.set_allocated_timestamp(&timestamp);
+      
+      c_usr->add_unseenPost(msg);
+      msg.release_timestamp();
     }
 }
 
-std::vector<User> merge_vectors(std::vector<User> &current_db, std::vector<User> &global_db){
-    std::vector<User> all_users;
-    User * user;
-    // check the global db and see if the user exist
-    for(User usr :  global_db){
-        std::string u_name = usr.get_username();
-        if((user = findUser(u_name, current_db)) != nullptr){
-            // the user exist in both, get current since its most recent
-            all_users.push_back(*user);
-        }else{// else the user doesnt exist in the current, thus add it from the current user
-            all_users.push_back(usr);
+int findUserIndex(std::string username, std::vector<User> &arr){
+    for(int i = 0; i < arr.size(); ++i){
+        if(arr[i].get_username() == username){
+            return i;
         }
     }
-    return all_users;
+    return -1;
+}
+
+void merge_vectors(std::vector<User> &current_db, std::vector<User> &global_db){
+    // iterate through current vector 
+    // if user exist in the vector swap them else add them to global vector
+    int c_index =0;
+    for(int i =0; i < current_db.size(); ++i){
+        c_index = findUserIndex(current_db[i].get_username(), global_db);
+        if(c_index == -1){
+            global_db.push_back(current_db[i]);
+        }else{
+            std::swap(current_db[i],global_db[c_index]);
+        }
+    }
 }
