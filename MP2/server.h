@@ -286,21 +286,24 @@ void loadPosts(std::string &c_username, User * c_usr){
     
     // get all the post in the file
     Message msg;
-    int index = 0; 
+    int index = 0, a_index = 0; 
     std::string post, tm, message;
     time_t utc;
     struct std::tm tim;
     Timestamp timestamp;
+    std::string username;
     while(!ifs.eof()){
       std::getline(ifs,post);
       if(post.empty())continue;
       while(post[++index] != '-'){}
-      
-      message = post.substr(0, index-1);
-      tm = post.substr(index+1, post.size() - index);
+      username = post.substr(0, index);
+      a_index = index + 1;
+      while(post[++a_index] != '-'){}
+      message = post.substr(index+1, a_index-1);
+      tm = post.substr(a_index+1, post.size() - a_index);
       index = 0; // reset the index
       
-      msg.set_username(c_username);
+      msg.set_username(username);
       msg.set_msg(message);
       
       std::istringstream ss(tm);

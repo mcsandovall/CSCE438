@@ -1,5 +1,4 @@
 #include <ctime>
-#include <algorithm>
 #include <google/protobuf/timestamp.pb.h>
 #include <google/protobuf/duration.pb.h>
 #include <thread>
@@ -17,6 +16,7 @@
 #include "sns.grpc.pb.h"
 #include <iomanip>
 #include <sstream>
+#include <mutex>
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
@@ -38,6 +38,7 @@ void termination_handler(int sig);
 // use vector for the database
 std::vector<User> user_db;
 std::vector<User> current_db;
+std::mutex p_mtx;
 
 class SNSServiceImpl final : public SNSService::Service {
   
@@ -178,9 +179,7 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     
     if(c_usr){
-      for(std::string followed :  c_usr->getFollowingList()){ // get all the post from followed user
-        loadPosts(followed, c_usr);
-      }
+      loadPosts(c_username, c_usr);
       if(c_usr->getUnseenPosts()->size() > 20){
         c_usr->getUnseenPosts()->erase(c_usr->getUnseenPosts()->begin(),c_usr->getUnseenPosts()->begin() + (c_usr->getUnseenPosts()->size()-20));
       }
@@ -225,16 +224,15 @@ class SNSServiceImpl final : public SNSService::Service {
     while(stream->Read(&message)){
       // Add the post to all the followers list
       for(std::string follower : usr->getListOfFollwers()){
-        if(follower == usr->get_username())continue; // do not send it to yourself
-        flwr = findUser(follower, current_db);
-        if(!flwr)continue;
-        flwr->add_unseenPost(message);
+        if(follower != usr->get_username()){
+          flwr = findUser(follower, current_db);
+          if(!flwr)continue;
+          flwr->add_unseenPost(message);
+        }
+        std::ofstream ofs(follower + ".txt", std::ios::app);
+        utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
+        ofs << c_username + "-" + (message.msg() + "-" + std::ctime(&utc));
       }
-      // add it to the file of post they made
-      std::ofstream ofs(usr->get_username() + ".txt", std::ios::app);
-      utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
-      ofs << (message.msg() + "-" + std::ctime(&utc));
-      ofs.close();
     }
     usr->inTimeline = false;
     return Status::OK;
