@@ -17,7 +17,6 @@
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
-#include <map>
 
 #include "snc.grpc.pb.h"
 
@@ -60,24 +59,83 @@ private:
 int cid; // cluster id
 CServer *master, *slave, *synchronizer;
 public:
-    Cluster(int id), cid(id){}
+    Cluster(int id), cid(id), master(nullptr), slave(nullptr), synchronizer(nullptr){}
     ~Cluster(){ delete master; delete slave}
     int createServer(std::string port, ServerType t){
         switch(t){
             case ServerType::MASTER:
+                if(master){return -1;} // already exist 
+                master = new CServer(cid, port, t);
             break;
             case ServerType::CLIENT:
+                if(slave){return -1;}
+                slave = new CServer(cid, port, t);
             break;
             case ServerType::SYNCHRONIZER:
+                if(synchronizer){return -1;}
+                synchronizer = new CServer(cid, port, t);
             break;
             default:
             return -1; // neither of those worked
         }
+        return 0;
     }
+    std::string getServer(){
+        if(!master || !slave){ return "";} //check if the servers have been created
+        
+        if(master->isActive()){
+            return master->getPort();
+        }else if(slave->isActive()){
+            return slave->getPort();
+        }
+        return ""; // if neither of servers are active
+    }
+    std::string getFollowerSynchronizer(){return synchronizer->getPort();}
 };
+
+// vector that contains the clusters depending on the id
+std::map<int, Cluster> cluster_db;
 
 class SNSCoordinatorImp final : public SNSCoordinator::Service{
     
+    Status Login(ServerContext* context, const Request* request, Reply* reply){
+        // log in the requester 
+        
+        // check the type of request then handle accordinly
+        switch(request.requester()){
+            case RequesterType::SERVER:
+                // check the id
+                int sid = request.id();
+                // check the server type
+                switch(request.server_type()){
+                    // create a new instance of the type of server
+                    case ServerType::MASTER:
+                    
+                    break;
+                    case ServerType::SLAVE;
+                    break;
+                    case ServerType::SYNCHRONIZER:
+                    break;
+                    default:
+                    reply.set_msg("REQUEST FAILED");
+                }
+            break;
+            case RequesterType::CLIENT:
+                // check the id and return the port number
+                int cid = request.id();
+                cid = (cid % 3) + 1;
+                reply.set_msg(cluster_db[cid].getServer());
+            break;
+            default:
+            return Status::OK;
+        }
+        return Status::OK;
+    }
+    
+    Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
+        // create a thread each time there is a server connected to check their status
+        
+    }
 };
 
 void RunServer(std::string port_no){
@@ -94,5 +152,21 @@ void RunServer(std::string port_no){
 }
 // database for the clusters 
 int main(int argc, char** argv){
-    return 0;
+    // populate the clusters
+    for(int i = 1; i < 4;++i){
+        cluster_db[i] = Cluster(i);
+    }
+    
+    std::string port = "3010";
+    int opt = 0;
+    while ((opt = getopt(argc, argv, "p:")) != -1){
+        switch(opt) {
+          case 'p':
+              port = optarg;break;
+          default:
+          std::cerr << "Invalid Command Line Argument\n";
+        }
+    }
+    RunServer(port);
+
 }

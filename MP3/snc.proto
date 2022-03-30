@@ -35,8 +35,7 @@ import "google/protobuf/timestamp.proto";
 
 service SNSCoordinator{
     
-    rpc ServerLogin(Request) returns Reply {}
-    rpc ClientLogin(Request) returns Reply {}
+    rpc Login(Request) returns Reply {}
     // Bidirectional Communication to check on server interaction
     rpc ServerCommunicate(stream HeartBeat) returns (stream HeartBeat) {}
 }
@@ -58,7 +57,7 @@ message Request{
     // message with their port number
     string port_number = 2;
     // the id of the request
-    int32 uid = 3;
+    int32 id = 3;
     // the type of server
     ServerType server_type = 4;
 }
@@ -69,7 +68,7 @@ message Reply{
 
 message HeartBeat{
     // id of the server
-    int32 uid = 1;
+    int32 sid = 1;
     // type of the server
     ServerType s_type = 2;
     //Time the message was sent
