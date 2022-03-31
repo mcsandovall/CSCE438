@@ -36,7 +36,7 @@ tse: snc.pb.o snc.grpc.pb.o tse.o
 	$(PROTOC) --cpp_out=. $<
 
 clean:
-	rm -f *.txt *.o *.pb.cc *.pb.h tsc tsd
+	rm -f *.txt *.o *.pb.cc *.pb.h tsc tsd tse
 
 
 # The following is to test your system and ensure a smoother experience.

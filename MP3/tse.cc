@@ -31,7 +31,6 @@ using grpc::ServerWriter;
 using grpc::Status;
 using snsCoordinator::Request;
 using snsCoordinator::Reply;
-using snsCoordinator::SNSService;
 using snsCoordinator::HeartBeat;
 using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
@@ -48,7 +47,7 @@ public:
     CServer(int id, std::string port, ServerType t) : sid(id), port_no(port), active(true), type(t) {}
     bool isActive(){return active;}
     void changeStatus(){ active = !active;}
-    int getID{return sid;}
+    int getID(){return sid;}
     std::string getPort(){return port_no;}
     ServerType getType(){return type;}
 };
@@ -59,15 +58,16 @@ private:
 int cid; // cluster id
 CServer *master, *slave, *synchronizer;
 public:
-    Cluster(int id), cid(id), master(nullptr), slave(nullptr), synchronizer(nullptr){}
-    ~Cluster(){ delete master; delete slave}
+    Cluster() : cid(0), master(nullptr), slave(nullptr), synchronizer(nullptr){}
+    Cluster(int id) : cid(id), master(nullptr), slave(nullptr), synchronizer(nullptr){}
+    ~Cluster(){ delete master, slave;}
     int createServer(std::string port, ServerType t){
         switch(t){
             case ServerType::MASTER:
                 if(master){return -1;} // already exist 
                 master = new CServer(cid, port, t);
             break;
-            case ServerType::CLIENT:
+            case ServerType::SLAVE:
                 if(slave){return -1;}
                 slave = new CServer(cid, port, t);
             break;
@@ -119,27 +119,32 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
     
     Status Login(ServerContext* context, const Request* request, Reply* reply){
         // log in the requester 
-        reply.set_msg("SUCCESS");
+        reply->set_msg("SUCCESS");
         // check the type of request then handle accordinly
-        switch(request.requester()){
+        switch(request->requester()){
             case RequesterType::SERVER:
-                // check the id
-                int sid = request.id();
-                // create an instance of such server
-                if(cluster_db[sid].createServer(request.port_number(), request.server_type()) == -1){
-                    reply.set_msg("Server Already Exist");
+                {
+                    // check the id
+                    int sid = request->id();
+                    // create an instance of such server
+                    if((cluster_db[sid].createServer(request->port_number(), request->server_type())) == -1){
+                        reply->set_msg("Server Already Exist");
+                    }
                 }
-                break;
+            break;
             case RequesterType::CLIENT:
-                // check the id and return the port number
-                int cid = request.id();
-                cid = (cid % 3) + 1;
-                if(cluster_db[cid].getServer() == ""){
-                    reply.set_msg("Cluster can not be contacted");   
+                {
+                    // check the id and return the port number
+                    int cid = request->id();
+                    cid = (cid % 3) + 1;
+                    if(cluster_db[cid].getServer() == ""){
+                        reply->set_msg("Cluster can not be contacted");   
+                    }
                 }
-                break;
+            break;
             default:
-                reply.set_msg("Undefiend RequesterType");
+                reply->set_msg("Undefiend RequesterType");
+            break;
         }
         return Status::OK;
     }
@@ -155,7 +160,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                 sid = hb.sid();
                 s_type = hb.s_type();
             }
-            stream->Write(createMessage());
+            stream->Write(createMessage(sid));
         }
         // if server disconnects then deactive it
         cluster_db[sid].changeServerStatus(s_type);
