@@ -149,19 +149,23 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         return Status::OK;
     }
     
-    Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
+    Status ServerCommunicate(ServerContext* context, ServerReader<HeartBeat>* reader, HeartBeat * hb) override{
         // create a thread each time there is a server connected to check their status
-        HeartBeat hb;
         int sid = 0;
         ServerType s_type;
-        while(stream->Read(&hb)){
+        while(reader->Read(&hb)){
             if(!sid){
                 // get the current sid
                 sid = hb.sid();
                 s_type = hb.s_type();
             }
-            stream->Write(createMessage(sid));
         }
+        hb->set_sid(0);
+        hb->set_s_type(ServerType::COORDINATOR);
+        google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
+        timestamp->set_seconds(time(NULL));
+        timestamp->set_nanos(0);
+        hb->set_allocated_timestamp(timestamp);
         // if server disconnects then deactive it
         cluster_db[sid].changeServerStatus(s_type);
         return Status::OK;

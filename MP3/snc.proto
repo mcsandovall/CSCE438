@@ -8,7 +8,7 @@ service SNSCoordinator{
     
     rpc Login (Request) returns (Reply) {}
     // Bidirectional Communication to check on server interaction
-    rpc ServerCommunicate (stream HeartBeat) returns (stream HeartBeat) {}
+    rpc ServerCommunicate (stream HeartBeat) returns (HeartBeat) {}
 }
 
 enum ServerType{
