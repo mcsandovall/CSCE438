@@ -92,25 +92,18 @@ public:
     }
     std::string getFollowerSynchronizer(){return synchronizer->getPort();}
     void changeServerStatus(ServerType t){
-        // change the status of the server and change the heirarchy
-        if(t == ServerType::MASTER){
-            master->changeStatus();
+        if(t  == ServerType::MASTER){
+            delete master;
+            slave->type = ServerType::MASTER;
+            master = slave;
+            slave = nullptr;
         }else{
-            slave->changeStatus();
+            // delete the slave 
+            delete slave;
+            slave = nullptr;
         }
     }
 };
-
-HeartBeat createMessage(int sid){
-    HeartBeat hb;
-    hb.set_sid(sid);
-    hb.set_s_type(ServerType::COORDINATOR);
-    google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
-    timestamp->set_seconds(time(NULL));
-    timestamp->set_nanos(0);
-    hb.set_allocated_timestamp(timestamp);
-    return hb;
-}
 
 // vector that contains the clusters depending on the id
 std::map<int, Cluster> cluster_db;

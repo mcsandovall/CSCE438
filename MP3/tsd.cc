@@ -40,14 +40,12 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 #include <stdlib.h>
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
 
 #include "sns.grpc.pb.h"
-#include "snc.grpc.pb.h"
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
@@ -57,24 +55,12 @@ using grpc::ServerContext;
 using grpc::ServerReader;
 using grpc::ServerReaderWriter;
 using grpc::ServerWriter;
-
-using grpc::ClientContext;
-using grpc::ClientWriter;
-using grpc::ClientReaderWriter;
 using grpc::Status;
-
 using csce438::Message;
 using csce438::ListReply;
 using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
-
-using snsCoordinator::HeartBeat;
-using snsCoordinator::ServerType;
-using snsCoordinator::RequesterType;
-using snsCoordinator::SNSCoordinator;
-
-std::shared_ptr<SNSCoordinator::Stub> _stub;
 
 struct Client {
   std::string username;
@@ -87,75 +73,6 @@ struct Client {
     return (username == c1.username);
   }
 };
-
-// server class
-class SNSServer{
-public:
-  SNSServer(const int &id, const std::string &port, std::string &server_type) : sid(id), port_no(port){
-    if(server_type == "master"){
-      server_type = ServerType::MASTER;
-    }else{
-      server_type = ServerType::SLAVE;
-    }
-  }
-protected:
-  virtual int registerCoordinator(); // log in with the coordinator
-  virtual void contactCoordinator(); // maintain the hearbeat with the coordinator
-private:
-  int sid;
-  ServerType s_type;
-  std::string port_no;
-  std::unique_ptr<SNSCoordinator::Stub> _stub;
-};
-
-
-int SNSServer::registerCoordinator(std::string hostname, std::port){
-  // create the service stub
-  std::string login_info = hostname + ":" + port;
-  stub_ = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
-  
-  // contact the coordinator with the stub
-  SNSCoordinator::Request request;
-  request.set_requester(RequesterType::SERVER);
-  request.set_port_number(port_no);
-  request.set_id(sid);
-  request.set_server_type(s_type);
-  ClientContext context;
-  SNSCoordinator::Reply reply;
-  
-  Status status = stub_->Login(&context, request, &reply);
-  if(reply.msg() != "SUCCESS"){
-    return -1;
-  }
-  return 0;
-}
-
-HeartBeat makeHeartBeat(int id, std::string port, ServerType t){
-  HeartBeat hb;
-  hb.set_sid(id);
-  hb.set_s_type(t);
-  google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
-  timestamp->set_seconds(time(NULL));
-  timestamp->set_nanos(0);
-  hb.set_allocated_timestamp(timestamp);
-  return hb;
-}
-
-void SNSServer::contactCoordinator(){
-  // make a detached thread that talks with the coordinator
-  HeartBeat hb;
-  std::shared_ptr<ClientWriter<HeartBeat>> writer(stub_->ServerCommunicate(&context, &hb));
-  
-  // make a thread that sends the heartbeat
-  std::thread palpitation([writer, sid, port_no, s_type](){
-    while(true){
-      HeartBeat h = makeHeartBeat(sid, port_no, s_type);
-      writer->Write(h);
-    }
-  });
-  
-  palpitation.detach();
-}
 
 //Vector that stores every client that has been created
 std::vector<Client> client_db;
@@ -331,44 +248,15 @@ void RunServer(std::string port_no) {
 int main(int argc, char** argv) {
   
   std::string port = "3010";
-  std::string cip, cp, t;
-  int id;
-  
-  // get a check in case of errors
-  if(argc == 1){
-    std::cerr << "No commandline arguments provided\n";
-    return 0;
-  }
-  // get the flags that are passed down
-  for(int i = 1; i < argc; ++i){
-    if(i % 2 == 1){ // is a flag
-      if(argv[i] == "-cip"){
-        cip = argv[i+1];
-        continue;
-      }
-      if(argv[i] == "-cp"){
-        cp = argv[i+1];
-        continue;
-      }
-      if(argv[i] == "-id"){
-        id = std::stoi(argv[i+1]);
-        continue;
-      }
-      if(argv[i] == "-p"){
-        port = argv[i+1];
-        continue;
-      }
-      if(argv[i] == "-t"){
-        t = argv[i+1];
-        continue;
-      }
+  int opt = 0;
+  while ((opt = getopt(argc, argv, "p:")) != -1){
+    switch(opt) {
+      case 'p':
+          port = optarg;break;
+      default:
+	  std::cerr << "Invalid Command Line Argument\n";
     }
   }
-  // contact the coordinator
-  SNSServer mys(id,port,t);
-  mys.registerCoordinator(cip,cp);
-  mys.contactCoordinator();
-  // run the server
   RunServer(port);
 
   return 0;
