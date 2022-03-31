@@ -43,7 +43,8 @@ service SNSCoordinator{
 enum ServerType{
     MASTER,
     SLAVE,
-    SYNCHRONIZER
+    SYNCHRONIZER,
+    COORDINATOR
 }
 
 enum RequesterType{

@@ -91,7 +91,26 @@ public:
         return ""; // if neither of servers are active
     }
     std::string getFollowerSynchronizer(){return synchronizer->getPort();}
+    void changeServerStatus(ServerType t){
+        // change the status of the server and change the heirarchy
+        if(t == ServerType::MASTER){
+            master->changeStatus();
+        }else{
+            slave->changeStatus();
+        }
+    }
 };
+
+HeartBeat createMessage(int sid){
+    HeartBeat hb;
+    hb.set_sid(sid);
+    hb.set_s_type(ServerType::COORDINATOR);
+    google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
+    timestamp->set_seconds(time(NULL));
+    timestamp->set_nanos(0);
+    hb.set_allocated_timestamp(timestamp);
+    return hb;
+}
 
 // vector that contains the clusters depending on the id
 std::map<int, Cluster> cluster_db;
@@ -100,41 +119,47 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
     
     Status Login(ServerContext* context, const Request* request, Reply* reply){
         // log in the requester 
-        
+        reply.set_msg("SUCCESS");
         // check the type of request then handle accordinly
         switch(request.requester()){
             case RequesterType::SERVER:
                 // check the id
                 int sid = request.id();
-                // check the server type
-                switch(request.server_type()){
-                    // create a new instance of the type of server
-                    case ServerType::MASTER:
-                    
-                    break;
-                    case ServerType::SLAVE;
-                    break;
-                    case ServerType::SYNCHRONIZER:
-                    break;
-                    default:
-                    reply.set_msg("REQUEST FAILED");
+                // create an instance of such server
+                if(cluster_db[sid].createServer(request.port_number(), request.server_type()) == -1){
+                    reply.set_msg("Server Already Exist");
                 }
-            break;
+                break;
             case RequesterType::CLIENT:
                 // check the id and return the port number
                 int cid = request.id();
                 cid = (cid % 3) + 1;
-                reply.set_msg(cluster_db[cid].getServer());
-            break;
+                if(cluster_db[cid].getServer() == ""){
+                    reply.set_msg("Cluster can not be contacted");   
+                }
+                break;
             default:
-            return Status::OK;
+                reply.set_msg("Undefiend RequesterType");
         }
         return Status::OK;
     }
     
     Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
         // create a thread each time there is a server connected to check their status
-        
+        HeartBeat hb;
+        int sid = 0;
+        ServerType s_type;
+        while(stream->Read(&hb)){
+            if(!sid){
+                // get the current sid
+                sid = hb.sid();
+                s_type = hb.s_type();
+            }
+            stream->Write(createMessage());
+        }
+        // if server disconnects then deactive it
+        cluster_db[sid].changeServerStatus(s_type);
+        return Status::OK;
     }
 };
 
