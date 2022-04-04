@@ -121,10 +121,10 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                             // if assgined check slave port
                             if(!cluster_db[sid].assignPort(port, ServerType::SLAVE)){
                                 // return the cluster is full
-                                reply->set_msg("Cluster is full");
+                                reply->set_msg("full");
                             }else{
                                 // then the master is already filled, demoted
-                                reply->set_msg("demoted master already assigned");
+                                reply->set_msg("demoted");
                             }
                         }
                         break;
@@ -132,12 +132,12 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                         // check if slave port is already used
                         if(!cluster_db[sid].assignPort(port, type)){
                             // then return the port is already used
-                            reply->set_msg("slave already assigned port: " + cluster_db[sid].getSlave());
+                            reply->set_msg("full");
                         }
                         break;
                     case ServerType::SYNCHRONIZER:
                         if(!cluster_db[sid].assignPort(port, type)){
-                            reply->set_msg("synchronizer already assigned port: " + cluster_db[sid].getSynchronizer());
+                            reply->set_msg("full");
                         }
                         break;
                     default:
@@ -161,7 +161,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         return Status::OK;
     }
     
-    Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
+    Status ServerCommunicate(ServerContext* context, ServerReader<HeartBeat>* stream, HeartBeat* heartb) override{
         // create a thread each time there is a server connected to check their status
         HeartBeat hb;
         int sid = 0;
