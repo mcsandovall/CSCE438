@@ -17,9 +17,11 @@
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
+#include <map>
 
 #include "snc.grpc.pb.h"
 
+using std::string;
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
 using grpc::Server;
@@ -36,71 +38,59 @@ using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
 
-// implemntation of server class to hold info
-class CServer{
-private:
-    int sid;
-    std::string port_no;
-    bool active;
-    ServerType type;
-public:
-    CServer(int id, std::string port, ServerType t) : sid(id), port_no(port), active(true), type(t) {}
-    bool isActive(){return active;}
-    void changeStatus(){ active = !active;}
-    int getID(){return sid;}
-    std::string getPort(){return port_no;}
-    ServerType getType(){return type;}
-};
-
 // cluster class to include both types of servers and give functionality to the coordinator
 class Cluster{
 private:
 int cid; // cluster id
-CServer *master, *slave, *synchronizer;
+string master_port, slave_port, synchronizer_port;
 public:
-    Cluster() : cid(0), master(nullptr), slave(nullptr), synchronizer(nullptr){}
-    Cluster(int id) : cid(id), master(nullptr), slave(nullptr), synchronizer(nullptr){}
-    ~Cluster(){ delete master, slave;}
-    int createServer(std::string port, ServerType t){
-        switch(t){
-            case ServerType::MASTER:
-                if(master){return -1;} // already exist 
-                master = new CServer(cid, port, t);
+    Cluster() : cid(0), master_port(""), slave_port(""), synchronizer_port(""){}
+    Cluster(int id) : cid(id), master_port(""), slave_port(""), synchronizer_port(nullptr){}
+    ~Cluster(){}
+    int assignPort(string port, ServerType t){
+        // the port is assgined upon availibility 1 success 0 fail
+        switch (t)
+        {
+        case ServerType::MASTER:
+            if(master_port != ""){return 0;}
+            master_port = port;
             break;
-            case ServerType::SLAVE:
-                if(slave){return -1;}
-                slave = new CServer(cid, port, t);
+        case ServerType::SLAVE:
+            if(slave_port != ""){return 0;}
+            slave_port = port;
+        case ServerType::SYNCHRONIZER:
+            if(synchronizer_port != ""){return 0;}
+            synchronizer_port = port;
+        default:
             break;
-            case ServerType::SYNCHRONIZER:
-                if(synchronizer){return -1;}
-                synchronizer = new CServer(cid, port, t);
-            break;
-            default:
-            return -1; // neither of those worked
         }
-        return 0;
+        return 1;
     }
-    std::string getServer(){
-        if(!master || !slave){ return "";} //check if the servers have been created
-        
-        if(master->isActive()){
-            return master->getPort();
-        }else if(slave->isActive()){
-            return slave->getPort();
-        }
-        return ""; // if neither of servers are active
+    string getServer(){
+        // check if the server exist
+        if(master_port == "" && slave_port == ""){return "";}
+        if(master_port != ""){return master_port;}
+        else return slave_port;
     }
-    std::string getFollowerSynchronizer(){return synchronizer->getPort();}
+    string getMaster(){
+        return ((master_port == "") ? "" : master_port);
+    }
+    string getSlave(){
+        return ((slave_port == "") ? "" : slave_port);
+    }
+    string getSynchronizer(){
+        return ((synchronizer_port == "") ? "" : synchronizer_port);
+    }
+
     void changeServerStatus(ServerType t){
-        if(t  == ServerType::MASTER){
-            delete master;
-            slave->type = ServerType::MASTER;
-            master = slave;
-            slave = nullptr;
+        // change the status of the server
+        if(t == ServerType::MASTER){
+            // if the server is the master change the slave to master and set slave to null
+            master_port = slave_port;
+            slave_port.clear();
         }else{
-            // delete the slave 
-            delete slave;
-            slave = nullptr;
+            // erase the slave port 
+            slave_port.erase();
         }
     }
 };
@@ -119,9 +109,39 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                 {
                     // check the id
                     int sid = request->id();
-                    // create an instance of such server
-                    if((cluster_db[sid].createServer(request->port_number(), request->server_type())) == -1){
-                        reply->set_msg("Server Already Exist");
+                    // get the type of server
+                    ServerType type = request->server_type();
+                    // get the port
+                    string port = request->port_number();
+                    switch (type)
+                    {
+                    case ServerType::MASTER:
+                        // check if master port is assgined
+                        if(!cluster_db[sid].assignPort(port, type)){
+                            // if assgined check slave port
+                            if(!cluster_db[sid].assignPort(port, ServerType::SLAVE)){
+                                // return the cluster is full
+                                reply->set_msg("Cluster is full");
+                            }else{
+                                // then the master is already filled, demoted
+                                reply->set_msg("demoted master already assigned");
+                            }
+                        }
+                        break;
+                    case ServerType::SLAVE:
+                        // check if slave port is already used
+                        if(!cluster_db[sid].assignPort(port, type)){
+                            // then return the port is already used
+                            reply->set_msg("slave already assigned port: " + cluster_db[sid].getSlave());
+                        }
+                        break;
+                    case ServerType::SYNCHRONIZER:
+                        if(!cluster_db[sid].assignPort(port, type)){
+                            reply->set_msg("synchronizer already assigned port: " + cluster_db[sid].getSynchronizer());
+                        }
+                        break;
+                    default:
+                        break;
                     }
                 }
             break;
@@ -130,35 +150,30 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     // check the id and return the port number
                     int cid = request->id();
                     cid = (cid % 3) + 1;
-                    if(cluster_db[cid].getServer() == ""){
-                        reply->set_msg("Cluster can not be contacted");   
-                    }
+                    // set the message with the server id (master | slave)
+                    reply->set_msg(cluster_db[cid].getServer());
                 }
             break;
             default:
-                reply->set_msg("Undefiend RequesterType");
+                reply->set_msg("Undefind");
             break;
         }
         return Status::OK;
     }
     
-    Status ServerCommunicate(ServerContext* context, ServerReader<HeartBeat>* reader, HeartBeat * hb) override{
+    Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
         // create a thread each time there is a server connected to check their status
+        HeartBeat hb;
         int sid = 0;
         ServerType s_type;
-        while(reader->Read(&hb)){
+        //implement a timing system for communication 10s
+        while(stream->Read(&hb)){
             if(!sid){
                 // get the current sid
                 sid = hb.sid();
                 s_type = hb.s_type();
             }
         }
-        hb->set_sid(0);
-        hb->set_s_type(ServerType::COORDINATOR);
-        google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
-        timestamp->set_seconds(time(NULL));
-        timestamp->set_nanos(0);
-        hb->set_allocated_timestamp(timestamp);
         // if server disconnects then deactive it
         cluster_db[sid].changeServerStatus(s_type);
         return Status::OK;
