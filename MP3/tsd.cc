@@ -355,9 +355,14 @@ int main(int argc, char** argv) {
     if(std::strcmp(argv[i], "-t") == 0){t = argv[i+1];}
   }
   // create the server
-  
+  CServer mys(port, id, t);
   // contact the coordinator
-
+  if(mys.contactCoordinator(cip, cp) < 0){
+    std::cerr << "Error contacting coordinator\n";
+    return -1;
+  }
+  // establish the conection with the coordinator
+  mys.messageCoordinator();
   //RunServer(port);
 
   return 0;
