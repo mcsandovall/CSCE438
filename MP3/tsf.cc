@@ -78,5 +78,9 @@ int main(int argc, char** argv){
         if(std::strcmp(argv[i], "-id") == 0) id = std::stoi(argv[i+1]);
     }
     Synchronizer mys(port, id); 
-    mys.reachCoordinator(cip, cp);
+    if(!mys.reachCoordinator(cip, cp)){
+        std::cerr << "Synchronizer: Coordinator Communicator\n";
+        std::exit(EXIT_FAILURE);
+    }
+    
 }

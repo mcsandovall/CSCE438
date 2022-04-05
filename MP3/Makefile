@@ -39,7 +39,7 @@ tsf: snc.pb.o snc.grpc.pb.o tsf.o
 	$(PROTOC) --cpp_out=. $<
 
 clean:
-	rm -f *.txt *.o *.pb.cc *.pb.h tsc tsd tse
+	rm -f *.txt *.o *.pb.cc *.pb.h tsc tsd tse tsf
 
 
 # The following is to test your system and ensure a smoother experience.
