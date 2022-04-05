@@ -1,51 +1,25 @@
-/*
- *
- * Copyright 2015, Google Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
 #include <ctime>
-
-#include <google/protobuf/timestamp.pb.h>
-#include <google/protobuf/duration.pb.h>
-
+#include <thread>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
+#include <iomanip>
+#include <sstream>
+#include <mutex>
+#include <chrono>
+
+#include "server.h" 
+
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
-#include <thread>
-#include <chrono>
+
+#include <google/protobuf/timestamp.pb.h>
+#include <google/protobuf/duration.pb.h>
 
 #include "sns.grpc.pb.h"
 #include "snc.grpc.pb.h"
@@ -77,17 +51,7 @@ using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
 
-struct Client {
-  std::string username;
-  bool connected = true;
-  int following_file_size = 0;
-  std::vector<Client*> client_followers;
-  std::vector<Client*> client_following;
-  ServerReaderWriter<Message, Message>* stream = 0;
-  bool operator==(const Client& c1) const{
-    return (username == c1.username);
-  }
-};
+#define DB_PATH "user_db.json"
 
 class CServer{
 public:
@@ -170,178 +134,237 @@ void CServer::messageCoordinator(){
   writer.detach();
 }
 
-//Vector that stores every client that has been created
-std::vector<Client> client_db;
 
-//Helper function used to find a Client object given its username
-int find_user(std::string username){
-  int index = 0;
-  for(Client c : client_db){
-    if(c.username == username)
-      return index;
-    index++;
-  }
-  return -1;
-}
+void termination_handler(int sig);
+// use vector for the database
+std::vector<User> user_db;
+std::vector<User> current_db;
+std::mutex p_mtx;
 
 class SNSServiceImpl final : public SNSService::Service {
   
-  Status List(ServerContext* context, const Request* request, ListReply* list_reply) override {
-    Client user = client_db[find_user(request->username())];
-    int index = 0;
-    for(Client c : client_db){
-      list_reply->add_all_users(c.username);
+  Status List(ServerContext* context, const Request* request, Reply* reply) override {
+    // ------------------------------------------------------------
+    // In this function, you are to write code that handles 
+    // LIST request from the user. Ensure that both the fields
+    // all_users & following_users are populated
+    // ------------------------------------------------------------
+    
+    // find the user in the current db
+    std::string username = request->username();
+    User * usr = findUser(username, current_db);
+    if(!usr){ // user doesnt exist for wtv reasosn
+      reply->set_msg("ERROR USER DOESNT EXIST");
+      return Status::CANCELLED;
     }
-    std::vector<Client*>::const_iterator it;
-    for(it = user.client_followers.begin(); it!=user.client_followers.end(); it++){
-      list_reply->add_followers((*it)->username);
+    
+    // get the names of all the current users 
+    for(User usr : current_db){
+      reply->add_all_users(usr.get_username());
     }
+    
+    // get the list of users following the current users
+    for(std::string follower : usr->getListOfFollwers()){
+      reply->add_following_users(follower);
+    }
+    
+    reply->set_msg("SUCCESS");
     return Status::OK;
   }
 
   Status Follow(ServerContext* context, const Request* request, Reply* reply) override {
-    std::string username1 = request->username();
-    std::string username2 = request->arguments(0);
-    int join_index = find_user(username2);
-    if(join_index < 0 || username1 == username2)
-      reply->set_msg("Join Failed -- Invalid Username");
-    else{
-      Client *user1 = &client_db[find_user(username1)];
-      Client *user2 = &client_db[join_index];
-      if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) != user1->client_following.end()){
-	reply->set_msg("Join Failed -- Already Following User");
-        return Status::OK;
-      }
-      user1->client_following.push_back(user2);
-      user2->client_followers.push_back(user1);
-      reply->set_msg("Join Successful");
+    // ------------------------------------------------------------
+    // In this function, you are to write code that handles 
+    // request from a user to follow one of the existing
+    // users
+    // ------------------------------------------------------------
+    
+    // get the current user
+    std::string username = request->username();
+    User * usr = findUser(username, current_db);
+    if(!usr){
+      reply->set_msg("ERROR_USER_DOESNT_EXIST");
+      return Status::CANCELLED;
     }
+    
+    // find the user to follow
+    std::string f_username = request->arguments(0);
+    User * followee = findUser(f_username, current_db);
+    if(!followee){ // user does not exist
+      reply->set_msg("FAILURE_INVALID_USERNAME");
+      return Status::OK;
+    }
+    
+    // follow the user
+    std::string UStatus = usr->follow_user(f_username);
+    if(UStatus != "SUCCESS"){
+      reply->set_msg(UStatus);
+      return Status::OK;
+    }
+    
+    // add current as a follower for the other user
+    std::string FStatus = followee->add_follower(username);
+    if(FStatus != "SUCCESS"){
+      reply->set_msg(FStatus);
+      return Status::OK;
+    }
+    
+    // success the process was completed
+    reply->set_msg(UStatus);
     return Status::OK; 
   }
 
   Status UnFollow(ServerContext* context, const Request* request, Reply* reply) override {
-    std::string username1 = request->username();
-    std::string username2 = request->arguments(0);
-    int leave_index = find_user(username2);
-    if(leave_index < 0 || username1 == username2)
-      reply->set_msg("Leave Failed -- Invalid Username");
-    else{
-      Client *user1 = &client_db[find_user(username1)];
-      Client *user2 = &client_db[leave_index];
-      if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) == user1->client_following.end()){
-	reply->set_msg("Leave Failed -- Not Following User");
-        return Status::OK;
-      }
-      user1->client_following.erase(find(user1->client_following.begin(), user1->client_following.end(), user2)); 
-      user2->client_followers.erase(find(user2->client_followers.begin(), user2->client_followers.end(), user1));
-      reply->set_msg("Leave Successful");
+    // ------------------------------------------------------------
+    // In this function, you are to write code that handles 
+    // request from a user to unfollow one of his/her existing
+    // followers
+    // ------------------------------------------------------------
+    
+    // get current user
+    std::string current_username = request->username();
+    User * c_usr = findUser(current_username, current_db);
+    if(!c_usr){
+      reply->set_msg("ERROR_USER_DOESNT_EXIST");
+      return Status::CANCELLED;
     }
+    
+    // get the user to unfollow
+    std::string other_user = request->arguments(0);
+    User * o_usr = findUser(other_user, current_db);
+    if(!o_usr){ // other user doesnt exist
+      reply->set_msg("FAILURE_INVALID_USERNAME");
+      return Status::OK;
+    }
+    
+    // unfollow the user
+    std::string c_status = c_usr->unfollow_user(other_user);
+    if(c_status != "SUCCESS"){
+      reply->set_msg(c_status);
+      return Status::OK;
+    }
+    
+    // remove current user from other following list
+    std::string o_status = o_usr->remove_follower(current_username);
+    if(o_status != "SUCCESS"){
+      reply->set_msg(o_status);
+      return Status::OK;
+    }
+    
+    reply->set_msg(c_status);
     return Status::OK;
   }
   
   Status Login(ServerContext* context, const Request* request, Reply* reply) override {
-    Client c;
-    std::string username = request->username();
-    int user_index = find_user(username);
-    if(user_index < 0){
-      c.username = username;
-      client_db.push_back(c);
-      reply->set_msg("Login Successful!");
-    }
-    else{ 
-      Client *user = &client_db[user_index];
-      if(user->connected)
-        reply->set_msg("Invalid Username");
-      else{
-        std::string msg = "Welcome Back " + user->username;
-	reply->set_msg(msg);
-        user->connected = true;
+    // ------------------------------------------------------------
+    // In this function, you are to write code that handles 
+    // a new user and verify if the username is available
+    // or already taken
+    // ------------------------------------------------------------
+    
+    // check if user already exist
+    std::string c_username = request->username();
+    User * c_usr = findUser(c_username, current_db);
+    if(!c_usr){
+      // look for it in the global db
+      c_usr = findUser(c_username, user_db);
+      if(!c_usr){ // if not in either crete a new one
+        current_db.push_back(User(c_username));
+        std::ofstream ofs(c_username + ".txt");
+        ofs.close();
+        std::cout << c_username << " sucesfully connected ..." << std::endl;
+      }else{
+        // if successfully reconected add it to the current db
+        current_db.push_back(*c_usr);
       }
     }
+    
+    if(c_usr){
+      loadPosts(c_username, c_usr);
+      if(c_usr->getUnseenPosts()->size() > 20){
+        c_usr->getUnseenPosts()->erase(c_usr->getUnseenPosts()->begin(),c_usr->getUnseenPosts()->begin() + (c_usr->getUnseenPosts()->size()-20));
+      }
+    }
+    
+    reply->set_msg("SUCCESS");
     return Status::OK;
   }
 
-  Status Timeline(ServerContext* context, 
-		ServerReaderWriter<Message, Message>* stream) override {
+  Status Timeline(ServerContext* context, ServerReaderWriter<Message, Message>* stream) override {
+    // ------------------------------------------------------------
+    // In this function, you are to write code that handles 
+    // receiving a message/post from a user, recording it in a file
+    // and then making it available on his/her follower's streams
+    // -----------------------------------------------------------
+    
     Message message;
-    Client *c;
-    while(stream->Read(&message)) {
-      std::string username = message.username();
-      int user_index = find_user(username);
-      c = &client_db[user_index];
- 
-      //Write the current message to "username.txt"
-      std::string filename = username+".txt";
-      std::ofstream user_file(filename,std::ios::app|std::ios::out|std::ios::in);
-      google::protobuf::Timestamp temptime = message.timestamp();
-      std::string time = google::protobuf::util::TimeUtil::ToString(temptime);
-      std::string fileinput = time+" :: "+message.username()+":"+message.msg()+"\n";
-      //"Set Stream" is the default message from the client to initialize the stream
-      if(message.msg() != "Set Stream")
-        user_file << fileinput;
-      //If message = "Set Stream", print the first 20 chats from the people you follow
-      else{
-        if(c->stream==0)
-      	  c->stream = stream;
-        std::string line;
-        std::vector<std::string> newest_twenty;
-        std::ifstream in(username+"following.txt");
-        int count = 0;
-        //Read the last up-to-20 lines (newest 20 messages) from userfollowing.txt
-        while(getline(in, line)){
-          if(c->following_file_size > 20){
-	    if(count < c->following_file_size-20){
-              count++;
-	      continue;
-            }
-          }
-          newest_twenty.push_back(line);
-        }
-        Message new_msg; 
- 	//Send the newest messages to the client to be displayed
-	for(int i = 0; i<newest_twenty.size(); i++){
-	  new_msg.set_msg(newest_twenty[i]);
-          stream->Write(new_msg);
-        }    
-        continue;
+    std::string c_username;
+    std::string msg;
+    User * usr = nullptr;
+    
+    // get an inital command for the username
+    if(stream->Read(&message)){
+      c_username = message.username();
+    }
+    
+    usr = findUser(c_username, current_db);
+    usr->inTimeline = true;
+    std::thread writer([stream](User * usr){
+      while(usr->inTimeline){
+        if(usr->getUnseenPosts()->size() == 0) continue;
+        stream->Write(usr->getUnseenPosts()->back());
+        usr->getUnseenPosts()->pop_back();
       }
-      //Send the message to each follower's stream
-      std::vector<Client*>::const_iterator it;
-      for(it = c->client_followers.begin(); it!=c->client_followers.end(); it++){
-        Client *temp_client = *it;
-      	if(temp_client->stream!=0 && temp_client->connected)
-	  temp_client->stream->Write(message);
-        //For each of the current user's followers, put the message in their following.txt file
-        std::string temp_username = temp_client->username;
-        std::string temp_file = temp_username + "following.txt";
-	std::ofstream following_file(temp_file,std::ios::app|std::ios::out|std::ios::in);
-	following_file << fileinput;
-        temp_client->following_file_size++;
-	std::ofstream user_file(temp_username + ".txt",std::ios::app|std::ios::out|std::ios::in);
-        user_file << fileinput;
+    }, usr);
+    
+    
+    writer.detach();
+    
+    User * flwr;
+    time_t utc;
+    while(stream->Read(&message)){
+      // Add the post to all the followers list
+      for(std::string follower : usr->getListOfFollwers()){
+        if(follower != usr->get_username()){ // add the message to followers queue
+          flwr = findUser(follower, current_db);
+          if(!flwr)continue;
+          flwr->add_unseenPost(message);
+        }
+        std::ofstream ofs(follower + ".txt", std::ios::app);
+        utc = google::protobuf::util::TimeUtil::TimestampToTimeT(message.timestamp());
+        ofs << c_username + "-" + (message.msg() + "-" + std::ctime(&utc));
       }
     }
-    //If the client disconnected from Chat Mode, set connected to false
-    c->connected = false;
+    usr->inTimeline = false;
     return Status::OK;
   }
-
 };
 
 void RunServer(std::string port_no) {
-  std::string server_address = "0.0.0.0:"+port_no;
+  // ------------------------------------------------------------
+  // In this function, you are to write code 
+  // which would start the server, make it listen on a particular
+  // port number.
+  // ------------------------------------------------------------
   SNSServiceImpl service;
-
+  
+  // populate the server databse
+  std::string server_address("127.0.0.1:" + port_no);
+  std::string db = getDbFileContent(DB_PATH);
+  ParseDB(db, &user_db);
+  
   ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "Server listening on " << server_address << std::endl;
-
+  std::cout << "Server listening on " << port_no << std::endl;
   server->Wait();
 }
 
 int main(int argc, char** argv) {
+  
+  // signal handler
+  signal(SIGINT, termination_handler);
   
   std::string port = "3010", cip, cp, t;
   int id;
@@ -366,4 +389,12 @@ int main(int argc, char** argv) {
   //RunServer(port);
 
   return 0;
+}
+
+void termination_handler(int sig){
+  // in case of the server failure or interruption write everything to the db file
+  
+  merge_vectors(current_db,user_db);
+  UpdateFileContent(user_db);
+  exit(1);
 }
