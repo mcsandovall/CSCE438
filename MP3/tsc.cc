@@ -8,17 +8,25 @@
 #include "client.h"
 
 #include "sns.grpc.pb.h"
+#include "snc.grpc.pb.h"
+
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::ClientReader;
 using grpc::ClientReaderWriter;
 using grpc::ClientWriter;
 using grpc::Status;
+
 using csce438::Message;
 using csce438::ListReply;
 using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
+
+using snsCoordinator::HeartBeat;
+using snsCoordinator::ServerType;
+using snsCoordinator::RequesterType;
+using snsCoordinator::SNSCoordinator;
 
 Message MakeMessage(const std::string& username, const std::string& msg) {
     Message m;
@@ -36,8 +44,9 @@ class Client : public IClient
     public:
         Client(const std::string& hname,
                const std::string& uname,
-               const std::string& p)
-            :hostname(hname), username(uname), port(p)
+               const std::string& p,
+               const int &cid)
+            :hostname(hname), username(uname), port(p), id(cid)
             {}
     protected:
         virtual int connectTo();
@@ -47,39 +56,38 @@ class Client : public IClient
         std::string hostname;
         std::string username;
         std::string port;
+        int id;
         // You can have an instance of the client stub
         // as a member variable.
         std::unique_ptr<SNSService::Stub> stub_;
-
+        // client stub for the coordinator
+        std::unique_ptr<SNSCoordinator::Stub> cstub;
+        // Server communication methods
         IReply Login();
         IReply List();
         IReply Follow(const std::string& username2);
         IReply UnFollow(const std::string& username2);
         void Timeline(const std::string& username);
-
+        //Coordinator communication methods
+        int CLogin();
 
 };
 
 int main(int argc, char** argv) {
 
-    std::string hostname = "localhost";
-    std::string username = "default";
-    std::string port = "3010";
-    int opt = 0;
-    while ((opt = getopt(argc, argv, "h:u:p:")) != -1){
-        switch(opt) {
-            case 'h':
-                hostname = optarg;break;
-            case 'u':
-                username = optarg;break;
-            case 'p':
-                port = optarg;break;
-            default:
-                std::cerr << "Invalid Command Line Argument\n";
-        }
+    std::string cip = "localhost", cp, username;
+    int id;
+    if(argc < 9){
+        std::cerr << "Error: Not Enough Arguments\n";
+        return -1;
     }
-
-    Client myc(hostname, username, port);
+    for(int i = 1; i < argc; ++i){
+        if(std::strcmp(argv[i],"-cip")) cip =  argv[i+1];
+        if(std::strcmp(argv[i],"-cp")) cp = argv[i+1];
+        if(std::strcmp(argv[i],"-id")) id = std::stoi(argv[i+1]);
+        if(std::strcmp(argv[i],"-u")) username = argv[i+1];
+    }
+    Client myc(cip, username, cp, id);
     // You MUST invoke "run_client" function to start business logic
     myc.run_client();
 
@@ -98,10 +106,21 @@ int Client::connectTo()
     // Please refer to gRpc tutorial how to create a stub.
 	// ------------------------------------------------------------
     std::string login_info = hostname + ":" + port;
+    // create the stub for the coordinator and ask for the port of the service
+    cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+    // contact the coordinator to get the port number for the respective cluster
+    if(!CLogin()){
+        std::cerr << "Error: Coordinator com failed\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    login_info = hostname + ":" + port;
+    std::string s_port;
+
     stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(
                grpc::CreateChannel(
                     login_info, grpc::InsecureChannelCredentials())));
-
+    
     IReply ire = Login();
     if(!ire.grpc_status.ok()) {
         return -1;
@@ -342,3 +361,17 @@ void Client::Timeline(const std::string& username) {
     reader.join();
 }
 
+int Client::CLogin(){
+    // communicate with the coordinator and change the port 
+    snsCoordinator::Request request;
+    request.set_requester(RequesterType::CLIENT);
+    request.set_id(id);
+
+    ClientContext context;
+    snsCoordinator::Reply reply;
+
+    Status status = cstub->Login(&context, request, &reply);
+    if(reply.msg() == "" || reply.msg() == "undefind") return 0;
+    port = reply.msg();
+    return 1;
+}
