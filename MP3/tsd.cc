@@ -46,9 +46,16 @@
 #include <grpc++/grpc++.h>
 
 #include "sns.grpc.pb.h"
+#include "snc.grpc.pb.h"
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::ClientReaderWriter;
+using grpc::ClientWriter;
+
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
@@ -56,11 +63,17 @@ using grpc::ServerReader;
 using grpc::ServerReaderWriter;
 using grpc::ServerWriter;
 using grpc::Status;
+
 using csce438::Message;
 using csce438::ListReply;
 using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
+
+using snsCoordinator::HeartBeat;
+using snsCoordinator::ServerType;
+using snsCoordinator::RequesterType;
+using snsCoordinator::SNSCoordinator;
 
 struct Client {
   std::string username;
@@ -73,6 +86,60 @@ struct Client {
     return (username == c1.username);
   }
 };
+
+class CServer{
+public:
+  CServer(const std::string &ip, const int &sid, const std::string &t){
+    ip_port = ip;
+    id = sid;
+    if(t == "master"){
+      type = ServerType::MASTER;
+    }else{
+      type = ServerType::SLAVE;
+    }
+  }
+  void Login(const std::string &cip,const std::string &cp);
+  void RequestServers();
+  void ContactCoordinator();
+private:
+  std::string ip_port;
+  int id;
+  ServerType type;
+  std::unique_ptr<SNSCoordinator::Stub> cstub;
+};
+
+// functions for the server
+
+void CServer::Login(const std::string &cip, const std::string &cp){
+  // send the current server information to the coordinator
+  cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(ip_port, grpc::InsecureChannelCredentials())));
+
+  // make a request and send it to the coordinator
+  snsCoordinator::Request request;
+  request.set_requester(RequesterType::SERVER);
+  request.set_port_number(ip_port);
+  request.set_id(id);
+  request.set_server_type(type);
+  snsCoordinator::Reply reply;
+  ClientContext context;
+
+  Status status = cstub->Login(&context, request, &reply);
+  if(status.ok()){
+    std::cout << "Coordinator reached succesfully\n";
+  }else{
+    // try again
+    Login(cip,cp);
+  }
+}
+
+void CServer::RequestServers(){
+  // request the port for the other type of server and synchronizer
+  // create a stub for those port if it is not NULL
+}
+
+void CServer::ContactCoordinator(){
+  // send a constant communication with the coordinator
+}
 
 //Vector that stores every client that has been created
 std::vector<Client> client_db;
@@ -248,16 +315,27 @@ void RunServer(std::string port_no) {
 int main(int argc, char** argv) {
   
   std::string port = "3010";
-  int opt = 0;
-  while ((opt = getopt(argc, argv, "p:")) != -1){
-    switch(opt) {
-      case 'p':
-          port = optarg;break;
-      default:
-	  std::cerr << "Invalid Command Line Argument\n";
-    }
+  std::string host =  "127.0.0.1"; // localhost
+  std::string cip, cp, t;
+  int id;
+  if(argc < 11){
+    std::cerr << "Not enough arguments\n";
+    std::exit(0);
   }
-  RunServer(port);
+
+  for(int i = 1; i < argc; ++i){
+    if(std::strcmp(argv[i], "-cip")) cip =  argv[i+1];
+    if(std::strcmp(argv[i], "-cp")) cp = argv[i+1];
+    if(std::strcmp(argv[i], "-p")) port = argv[i+1];
+    if(std::strcmp(argv[i], "-id")) id = std::stoi(argv[i+1]);
+    if(std::strcmp(argv[i], "-t")) t = argv[i+1];
+  }
+
+  CServer mys(host+":"+port, id, t);
+  mys.Login(cip, cp);
+  
+  // connect to the coordinator first
+  //RunServer(port);
 
   return 0;
 }

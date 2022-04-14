@@ -45,7 +45,7 @@ int cid; // cluster id
 string master_port, slave_port, synchronizer_port;
 public:
     Cluster() : cid(0), master_port(""), slave_port(""), synchronizer_port(""){}
-    Cluster(int id) : cid(id), master_port(""), slave_port(""), synchronizer_port(nullptr){}
+    Cluster(const int &id) : cid(id), master_port(""), slave_port(""), synchronizer_port(nullptr){}
     ~Cluster(){}
     int assignPort(string port, ServerType t){
         // the port is assgined upon availibility 1 success 0 fail
@@ -161,6 +161,68 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         return Status::OK;
     }
     
+    // Serer Request
+    Status ServerRequest(ServerContext* context, const Request* request, Reply* reply){
+        // return the server ip port for client and other server for cluster
+        if(request->requester() == RequesterType::SERVER){
+            // get the id and the server type
+            int sid = request->id();
+            ServerType t = request->server_type();
+            string server, message;
+            switch (t)
+            {
+            case ServerType::MASTER:
+                server = cluster_db[sid].getSlave();
+                
+                if(server == "") message ="NULL";
+                else message = server;
+                message += "-";
+
+                // get the synchronizer
+                server = cluster_db[sid].getSynchronizer();
+                if(server == "") message += "NULL";
+                else message += server;
+                reply->set_msg(message);
+                break;
+            case ServerType::SLAVE:
+                // get the master and the synchronizer
+                server = cluster_db[sid].getMaster();
+                if(server == "") message = "NULL";
+                else message = server;
+
+                message += "-";
+
+                server = cluster_db[sid].getSynchronizer();
+                if(server == "") message += "NULL";
+                else message += server;
+                reply->set_msg(message);
+                break;
+            case ServerType::SYNCHRONIZER:
+                // get the master and the slave port
+                server = cluster_db[sid].getMaster();
+                if(server == "") message = "NULL";
+                else message = server;
+
+                message += "-";
+
+                server = cluster_db[sid].getSlave();
+                if(server == "") message += "NULL";
+                else message += server;
+
+                reply->set_msg(message);
+                break;
+            default:
+                break;
+            }
+        }else{ // client
+            // check the id and return the master/ slave for that cluster
+            int cid = request->id();
+            cid = (cid % 3) + 1;
+            reply->set_msg(cluster_db[cid].getServer());
+        }
+        return Status::OK;
+    }
+
     Status ServerCommunicate(ServerContext* context, ServerReader<HeartBeat>* stream, HeartBeat* heartb) override{
         // create a thread each time there is a server connected to check their status
         HeartBeat hb;
