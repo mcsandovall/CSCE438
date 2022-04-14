@@ -44,11 +44,8 @@
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
-#include <thread>
-#include <chrono>
 
 #include "sns.grpc.pb.h"
-#include "snc.grpc.pb.h"
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
@@ -59,23 +56,11 @@ using grpc::ServerReader;
 using grpc::ServerReaderWriter;
 using grpc::ServerWriter;
 using grpc::Status;
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::ClientReader;
-using grpc::ClientReaderWriter;
-using grpc::ClientWriter;
-
 using csce438::Message;
 using csce438::ListReply;
 using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
-
-using snsCoordinator::HeartBeat;
-using snsCoordinator::ServerType;
-using snsCoordinator::RequesterType;
-using snsCoordinator::SNSCoordinator;
 
 struct Client {
   std::string username;
@@ -88,87 +73,6 @@ struct Client {
     return (username == c1.username);
   }
 };
-
-class CServer{
-public:
-  CServer(const std::string &port_no, const int &id, const std::string &t){
-    if(t == "master"){
-      type = ServerType::MASTER;
-    }else{
-      type = ServerType::SLAVE;
-    }
-  }
-  // functions to talk with the coordinator
-  int contactCoordinator(std::string &cip, std::string &cp);
-  void messageCoordinator();
-private:
-  std::string port;
-  int id;
-  ServerType type;
-  std::unique_ptr<SNSCoordinator::Stub> cstub;
-  snsCoordinator::Request createRequest();
-};
-
-//Function implementation for the Server class
-snsCoordinator::Request CServer::createRequest(){
-  snsCoordinator::Request request;
-  request.set_requester(RequesterType::SERVER);
-  request.set_port_number(port);
-  request.set_id(id);
-  request.set_server_type(type);
-  return request;
-}
-
-HeartBeat createHeartBeat(int &id, ServerType &type){
-  HeartBeat hb;
-  hb.set_sid(id);
-  hb.set_s_type(type);
-  google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
-  timestamp->set_seconds(time(NULL));
-  timestamp->set_nanos(0);
-  hb.set_allocated_timestamp(timestamp);
-  return hb;
-}
-
-//First message with the coordinator to send all current info
-int CServer::contactCoordinator(std::string &cip, std::string &cp){
-  // create a stub to handle the communication w the coordinator
-  std::string login_info = cip + ":" + cp;
-  cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
-
-  // create a request and send it to the coorindator
-  snsCoordinator::Request request = createRequest();
-  ClientContext context;
-  snsCoordinator::Reply reply;
-
-  Status status = cstub->Login(&context, request, &reply);
-  // check the possibilities from the coordinator
-  if(reply.msg() == "full") return -1; // the cluster is full
-  if(reply.msg() == "demoted") type = ServerType::SLAVE; // the server got demoted from master
-  return 0; // success
-}
-
-void CServer::messageCoordinator(){
-  // make threads to handle communication with the coordinator
-  ClientContext context;
-  HeartBeat hbt;
-  std::shared_ptr<ClientWriter<HeartBeat>> stream(
-            cstub->ServerCommunicate(&context, &hbt));
-  // writes messages to the coordinator make every 5s to increase perfromace
-  std::thread writer([stream](int id,ServerType type){
-    HeartBeat hb;
-    while(true){
-      hb = createHeartBeat(id, type);
-      stream->Write(hb);
-      // sleep for 5 seconds before sending another msg
-      std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
-    stream->WritesDone();
-  }, this->id, this->type);
-
-  // non blocking thread to continue process
-  writer.detach();
-}
 
 //Vector that stores every client that has been created
 std::vector<Client> client_db;
@@ -204,17 +108,17 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username2 = request->arguments(0);
     int join_index = find_user(username2);
     if(join_index < 0 || username1 == username2)
-      reply->set_msg("Join Failed -- Invalid Username");
+      reply->set_msg("unkown user name");
     else{
       Client *user1 = &client_db[find_user(username1)];
       Client *user2 = &client_db[join_index];
       if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) != user1->client_following.end()){
-	reply->set_msg("Join Failed -- Already Following User");
+	reply->set_msg("you have already joined");
         return Status::OK;
       }
       user1->client_following.push_back(user2);
       user2->client_followers.push_back(user1);
-      reply->set_msg("Join Successful");
+      reply->set_msg("Follow Successful");
     }
     return Status::OK; 
   }
@@ -224,17 +128,17 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username2 = request->arguments(0);
     int leave_index = find_user(username2);
     if(leave_index < 0 || username1 == username2)
-      reply->set_msg("Leave Failed -- Invalid Username");
+      reply->set_msg("unknown follower username");
     else{
       Client *user1 = &client_db[find_user(username1)];
       Client *user2 = &client_db[leave_index];
       if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) == user1->client_following.end()){
-	reply->set_msg("Leave Failed -- Not Following User");
+	reply->set_msg("you are not follower");
         return Status::OK;
       }
       user1->client_following.erase(find(user1->client_following.begin(), user1->client_following.end(), user2)); 
       user2->client_followers.erase(find(user2->client_followers.begin(), user2->client_followers.end(), user1));
-      reply->set_msg("Leave Successful");
+      reply->set_msg("UnFollow Successful");
     }
     return Status::OK;
   }
@@ -343,27 +247,17 @@ void RunServer(std::string port_no) {
 
 int main(int argc, char** argv) {
   
-  std::string port = "3010", cip, cp, t;
-  int id;
-  // check the flags
-  if(argc < 11){std::cerr << "Error: Not Enough Arguments"; return -1;}
-  for(int i = 1; i < argc; ++i){
-    if(std::strcmp(argv[i], "-cip") == 0){cip = argv[i+1];}
-    if(std::strcmp(argv[i], "-cp") == 0){cp = argv[i+1];}
-    if(std::strcmp(argv[i], "-p") == 0){port = argv[i+1];}
-    if(std::strcmp(argv[i], "-id") == 0){id = std::stoi(argv[i+1]);}
-    if(std::strcmp(argv[i], "-t") == 0){t = argv[i+1];}
+  std::string port = "3010";
+  int opt = 0;
+  while ((opt = getopt(argc, argv, "p:")) != -1){
+    switch(opt) {
+      case 'p':
+          port = optarg;break;
+      default:
+	  std::cerr << "Invalid Command Line Argument\n";
+    }
   }
-  // create the server
-  CServer mys(port, id, t);
-  // contact the coordinator
-  if(mys.contactCoordinator(cip, cp) < 0){
-    std::cerr << "Error contacting coordinator\n";
-    return -1;
-  }
-  // establish the conection with the coordinator
-  mys.messageCoordinator();
-  //RunServer(port);
+  RunServer(port);
 
   return 0;
 }
