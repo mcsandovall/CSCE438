@@ -8,17 +8,25 @@
 #include "client.h"
 
 #include "sns.grpc.pb.h"
+#include "snc.grpc.pb.h"
+
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::ClientReader;
 using grpc::ClientReaderWriter;
 using grpc::ClientWriter;
 using grpc::Status;
+
 using csce438::Message;
 using csce438::ListReply;
 using csce438::Request;
 using csce438::Reply;
 using csce438::SNSService;
+
+using snsCoordinator::HeartBeat;
+using snsCoordinator::ServerType;
+using snsCoordinator::RequesterType;
+using snsCoordinator::SNSCoordinator;
 
 Message MakeMessage(const std::string& username, const std::string& msg) {
     Message m;
@@ -50,6 +58,7 @@ class Client : public IClient
         // You can have an instance of the client stub
         // as a member variable.
         std::unique_ptr<SNSService::Stub> stub_;
+        std::unique_ptr<SNSCoordinator::Stub> cstub;
 
         IReply Login();
         IReply List();
@@ -62,24 +71,21 @@ class Client : public IClient
 
 int main(int argc, char** argv) {
 
-    std::string hostname = "localhost";
-    std::string username = "default";
-    std::string port = "3010";
-    int opt = 0;
-    while ((opt = getopt(argc, argv, "h:u:p:")) != -1){
-        switch(opt) {
-            case 'h':
-                hostname = optarg;break;
-            case 'u':
-                username = optarg;break;
-            case 'p':
-                port = optarg;break;
-            default:
-                std::cerr << "Invalid Command Line Argument\n";
-        }
+    std::string id;
+    std::string cip, cp;
+    if(argc < 7){
+        std::cerr << "Not enough Arguments\n";
+        std::exit(0);
     }
 
-    Client myc(hostname, username, port);
+    for(int i = 1; i < argc; ++i){
+        if(std::strcmp(argv[i], "-cip")) cip = argv[i+i];
+        if(std::strcmp(argv[i], "-cp")) cp = argv[i+1];
+        if(std::strcmp(argv[i], "-id")) id = argv[i+1];
+    }
+
+    Client myc(cip, id, cp); // make the client load the coordinator info
+
     // You MUST invoke "run_client" function to start business logic
     myc.run_client();
 
@@ -98,6 +104,24 @@ int Client::connectTo()
     // Please refer to gRpc tutorial how to create a stub.
 	// ------------------------------------------------------------
     std::string login_info = hostname + ":" + port;
+
+    // make a coordinator stub and request the server
+    cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+    // make the request and the reply has the result
+    snsCoordinator::Request request;
+    request.set_requester(RequesterType::CLIENT);
+    request.set_id(std::stoi(username));
+    snsCoordinator::Reply reply;
+    ClientContext context;
+
+    cstub->ServerRequest(&context, request, &reply);
+
+    // set the login info to the returned port number
+    login_info = reply.msg();
+    if(login_info == "") std::exit(0); // cant go on
+
+    // else create the stub for the server
+
     stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(
                grpc::CreateChannel(
                     login_info, grpc::InsecureChannelCredentials())));
