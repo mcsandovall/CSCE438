@@ -100,69 +100,50 @@ std::map<int, Cluster> cluster_db;
 
 class SNSCoordinatorImp final : public SNSCoordinator::Service{
     
-    Status Login(ServerContext* context, const Request* request, Reply* reply){
-        // log in the requester 
+    Status Login(ServerContext* context, const Request* request, Reply* reply) override{
+        // log in the server 
         reply->set_msg("SUCCESS");
-        // check the type of request then handle accordinly
-        switch(request->requester()){
-            case RequesterType::SERVER:
-                {
-                    // check the id
-                    int sid = request->id();
-                    // get the type of server
-                    ServerType type = request->server_type();
-                    // get the port
-                    string port = request->port_number();
-                    switch (type)
-                    {
-                    case ServerType::MASTER:
-                        // check if master port is assgined
-                        if(!cluster_db[sid].assignPort(port, type)){
-                            // if assgined check slave port
-                            if(!cluster_db[sid].assignPort(port, ServerType::SLAVE)){
-                                // return the cluster is full
-                                reply->set_msg("full");
-                            }else{
-                                // then the master is already filled, demoted
-                                reply->set_msg("demoted");
-                            }
-                        }
-                        break;
-                    case ServerType::SLAVE:
-                        // check if slave port is already used
-                        if(!cluster_db[sid].assignPort(port, type)){
-                            // then return the port is already used
-                            reply->set_msg("full");
-                        }
-                        break;
-                    case ServerType::SYNCHRONIZER:
-                        if(!cluster_db[sid].assignPort(port, type)){
-                            reply->set_msg("full");
-                        }
-                        break;
-                    default:
-                        break;
-                    }
+        // check the id
+        int sid = request->id();
+        // get the type of server
+        ServerType type = request->server_type();
+        // get the port
+        string port = request->port_number();
+        switch (type)
+        {
+        case ServerType::MASTER:
+            // check if master port is assgined
+            if(!cluster_db[sid].assignPort(port, type)){
+                // if assgined check slave port
+                if(!cluster_db[sid].assignPort(port, ServerType::SLAVE)){
+                    // return the cluster is full
+                    reply->set_msg("full");
+                }else{
+                    // then the master is already filled, demoted
+                    reply->set_msg("demoted");
                 }
+            }
             break;
-            case RequesterType::CLIENT:
-                {
-                    // check the id and return the port number
-                    int cid = request->id();
-                    cid = (cid % 3) + 1;
-                    // set the message with the server id (master | slave)
-                    reply->set_msg(cluster_db[cid].getServer());
-                }
+        case ServerType::SLAVE:
+            // check if slave port is already used
+            if(!cluster_db[sid].assignPort(port, type)){
+                // then return the port is already used
+                reply->set_msg("full");
+            }
             break;
-            default:
-                reply->set_msg("Undefind");
+        case ServerType::SYNCHRONIZER:
+            if(!cluster_db[sid].assignPort(port, type)){
+                reply->set_msg("full");
+            }
+            break;
+        default:
             break;
         }
         return Status::OK;
     }
     
-    // Serer Request
-    Status ServerRequest(ServerContext* context, const Request* request, Reply* reply){
+    // Request for a server
+    Status ServerRequest(ServerContext* context, const Request* request, Reply* reply) override{
         // return the server ip port for client and other server for cluster
         if(request->requester() == RequesterType::SERVER){
             // get the id and the server type
@@ -171,48 +152,41 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
             string server, message;
             switch (t)
             {
-            case ServerType::MASTER:
-                server = cluster_db[sid].getSlave();
-                
-                if(server == "") message ="NULL";
-                else message = server;
-                message += "-";
+                case ServerType::MASTER:
+                    server = cluster_db[sid].getSlave();
+                    
+                    if(server == "") message ="NULL";
+                    else message = server;
 
-                // get the synchronizer
-                server = cluster_db[sid].getSynchronizer();
-                if(server == "") message += "NULL";
-                else message += server;
-                reply->set_msg(message);
-                break;
-            case ServerType::SLAVE:
-                // get the master and the synchronizer
-                server = cluster_db[sid].getMaster();
-                if(server == "") message = "NULL";
-                else message = server;
+                    reply->set_msg(message);
+                    break;
+                case ServerType::SLAVE:
+                    // get the master and the synchronizer
+                    server = cluster_db[sid].getMaster();
+                    if(server == "") message = "NULL";
+                    else message = server;
 
-                message += "-";
+                    reply->set_msg(message);
+                    break;
+                case ServerType::SYNCHRONIZER:
+                    // get the other synchronizer port
+                    int synch;
+                    synch = sid + 1;
+                    if(synch > 3) synch = 1;
+                    server = cluster_db[synch].getSynchronizer();
+                    if(server == "") message = "NULL";
+                    else message = server;
 
-                server = cluster_db[sid].getSynchronizer();
-                if(server == "") message += "NULL";
-                else message += server;
-                reply->set_msg(message);
-                break;
-            case ServerType::SYNCHRONIZER:
-                // get the master and the slave port
-                server = cluster_db[sid].getMaster();
-                if(server == "") message = "NULL";
-                else message = server;
+                    message += "-";
 
-                message += "-";
+                    synch = sid - 1;
+                    if(synch == 0) synch = 3;
+                    server = cluster_db[synch].getSynchronizer();
 
-                server = cluster_db[sid].getSlave();
-                if(server == "") message += "NULL";
-                else message += server;
-
-                reply->set_msg(message);
-                break;
-            default:
-                break;
+                    reply->set_msg(message);
+                    break;
+                default:
+                    break;
             }
         }else{ // client
             // check the id and return the master/ slave for that cluster

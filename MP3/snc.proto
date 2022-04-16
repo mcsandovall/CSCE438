@@ -16,7 +16,6 @@ enum ServerType{
     MASTER = 0;
     SLAVE = 1;
     SYNCHRONIZER = 3;
-    COORDINATOR = 4;
 }
 
 enum RequesterType{

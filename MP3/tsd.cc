@@ -101,6 +101,8 @@ public:
   void Login(const std::string &cip,const std::string &cp);
   void RequestServers();
   void ContactCoordinator();
+  void createServerStub(const std::string &login_info);
+  std::unique_ptr<SNSService::Stub> stub_;
 private:
   std::string ip_port;
   int id;
@@ -130,15 +132,53 @@ void CServer::Login(const std::string &cip, const std::string &cp){
     // try again
     Login(cip,cp);
   }
+  // check for the flags in the login
+  if(reply.msg() == "full"){
+    std::cerr << "Error: Cluster already full\n";
+    std::exit(0);
+  }
+  else if (reply.msg() == "demoted") type = ServerType::SLAVE;
 }
 
 void CServer::RequestServers(){
-  // request the port for the other type of server and synchronizer
-  // create a stub for those port if it is not NULL
+  // request the info for the other server and crate a stub
+  snsCoordinator::Request request;
+  request.set_requester(RequesterType::SERVER);
+  request.set_port_number(ip_port);
+  request.set_id(id);
+  request.set_server_type(type);
+  snsCoordinator::Reply reply;
+  ClientContext context;
+
+  Status status = cstub->ServerRequest(&context, request, &reply);
+  // check if the message is null
+  if(reply.msg() != "NULL"){
+    // create stub and establish the bidirectional commuincation
+    stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(grpc::CreateChannel(reply.msg(), grpc::InsecureChannelCredentials())));
+    if(type == ServerType::SLAVE){
+      // send message to the master to create stub
+      Request request;
+      request.set_username(ip_port);
+      Reply reply;
+      ClientContext context;
+      Status status = stub_->Communicate(&context, request, &reply);
+      if(!status.ok()){
+        std::cerr << "Error contacting the master server\n";
+      }
+      stub_.reset();
+    }
+  }
 }
+
+void CServer::createServerStub(const std::string &login_info){
+  stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+}
+
+CServer * mys; // global variable of server 
 
 void CServer::ContactCoordinator(){
   // send a constant communication with the coordinator
+
 }
 
 //Vector that stores every client that has been created
@@ -171,6 +211,18 @@ class SNSServiceImpl final : public SNSService::Service {
   }
 
   Status Follow(ServerContext* context, const Request* request, Reply* reply) override {
+    if(mys->stub_){ // send the same request to the slave
+      Request req = *(Request*) request;
+      ClientContext cont;
+      Reply rep;
+      Status stat = mys->stub_->Follow(&cont, req, &rep);
+      if(!stat.ok()){
+        std::cerr << "Follow request not sent to slave\n";
+      }
+      if(rep.msg() != "Follow Successful"){
+        std::cerr << rep.msg() + "\n";
+      }
+    }
     std::string username1 = request->username();
     std::string username2 = request->arguments(0);
     int join_index = find_user(username2);
@@ -189,28 +241,18 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     return Status::OK; 
   }
-
-  Status UnFollow(ServerContext* context, const Request* request, Reply* reply) override {
-    std::string username1 = request->username();
-    std::string username2 = request->arguments(0);
-    int leave_index = find_user(username2);
-    if(leave_index < 0 || username1 == username2)
-      reply->set_msg("unknown follower username");
-    else{
-      Client *user1 = &client_db[find_user(username1)];
-      Client *user2 = &client_db[leave_index];
-      if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) == user1->client_following.end()){
-	reply->set_msg("you are not follower");
-        return Status::OK;
-      }
-      user1->client_following.erase(find(user1->client_following.begin(), user1->client_following.end(), user2)); 
-      user2->client_followers.erase(find(user2->client_followers.begin(), user2->client_followers.end(), user1));
-      reply->set_msg("UnFollow Successful");
-    }
-    return Status::OK;
-  }
   
   Status Login(ServerContext* context, const Request* request, Reply* reply) override {
+    if(mys->stub_){
+      // send the login message to the slave
+      Request req = *(Request*) request;
+      Reply rep;
+      ClientContext con;
+      Status stat = mys->stub_->Login(&con, req, &rep);
+      if(!stat.ok() || rep.msg() != "Login Successful!"){
+        std::cerr << "Error sending login to slave\n";
+      }
+    }
     Client c;
     std::string username = request->username();
     int user_index = find_user(username);
@@ -296,7 +338,13 @@ class SNSServiceImpl final : public SNSService::Service {
     c->connected = false;
     return Status::OK;
   }
-
+  
+  Status Communicate(ServerContext* context, const Request* request, Reply* reply) override {
+    // create a new stub with the login information held in username
+    std::string login_info = request->username();
+    mys->createServerStub(login_info);
+    return Status::OK;
+  }
 };
 
 void RunServer(std::string port_no) {
@@ -331,8 +379,8 @@ int main(int argc, char** argv) {
     if(std::strcmp(argv[i], "-t")) t = argv[i+1];
   }
 
-  CServer mys(host+":"+port, id, t);
-  mys.Login(cip, cp);
+  mys =  new CServer(host+":"+port, id, t);
+  mys->Login(cip, cp);
   
   // connect to the coordinator first
   //RunServer(port);

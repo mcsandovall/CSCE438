@@ -63,8 +63,8 @@ class Client : public IClient
         IReply Login();
         IReply List();
         IReply Follow(const std::string& username2);
-        IReply UnFollow(const std::string& username2);
         void Timeline(const std::string& username);
+        std::string requestServer(const std::string &login_info, const int &cid);
 
 
 };
@@ -104,23 +104,15 @@ int Client::connectTo()
     // Please refer to gRpc tutorial how to create a stub.
 	// ------------------------------------------------------------
     std::string login_info = hostname + ":" + port;
-
-    // make a coordinator stub and request the server
-    cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
-    // make the request and the reply has the result
-    snsCoordinator::Request request;
-    request.set_requester(RequesterType::CLIENT);
-    request.set_id(std::stoi(username));
-    snsCoordinator::Reply reply;
-    ClientContext context;
-
-    cstub->ServerRequest(&context, request, &reply);
-
     // set the login info to the returned port number
-    login_info = reply.msg();
-    if(login_info == "") std::exit(0); // cant go on
+    login_info = requestServer(login_info, std::stoi(username));
 
-    // else create the stub for the server
+    if(login_info == ""){
+        std::cerr << "No available server to contact\n";
+        std::exit(0);
+    }
+
+    // create the stub for the server
 
     stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(
                grpc::CreateChannel(
@@ -197,8 +189,6 @@ IReply Client::processCommand(std::string& input)
 
         if (cmd == "FOLLOW") {
             return Follow(argument);
-        } else if(cmd == "UNFOLLOW") {
-            return UnFollow(argument);
         }
     } else {
         if (input == "LIST") {
@@ -288,32 +278,6 @@ IReply Client::Follow(const std::string& username2) {
     return ire;
 }
 
-IReply Client::UnFollow(const std::string& username2) {
-    Request request;
-
-    request.set_username(username);
-    request.add_arguments(username2);
-
-    Reply reply;
-
-    ClientContext context;
-
-    Status status = stub_->UnFollow(&context, request, &reply);
-    IReply ire;
-    ire.grpc_status = status;
-    if (reply.msg() == "unknown follower username") {
-        ire.comm_status = FAILURE_INVALID_USERNAME;
-    } else if (reply.msg() == "you are not follower") {
-        ire.comm_status = FAILURE_INVALID_USERNAME;
-    } else if (reply.msg() == "UnFollow Successful") {
-        ire.comm_status = SUCCESS;
-    } else {
-        ire.comm_status = FAILURE_UNKNOWN;
-    }
-
-    return ire;
-}
-
 IReply Client::Login() {
     Request request;
     request.set_username(username);
@@ -333,6 +297,7 @@ IReply Client::Login() {
 }
 
 void Client::Timeline(const std::string& username) {
+
     ClientContext context;
 
     std::shared_ptr<ClientReaderWriter<Message, Message>> stream(
@@ -364,4 +329,22 @@ void Client::Timeline(const std::string& username) {
     //Wait for the threads to finish
     writer.join();
     reader.join();
+}
+
+std::string Client::requestServer(const std::string &login_info, const int &cid){
+    // make a coordinator stub and request the server
+    cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+
+    // make the request and the reply has the result
+    snsCoordinator::Request request;
+    request.set_requester(RequesterType::CLIENT);
+    request.set_id(std::stoi(username));
+    snsCoordinator::Reply reply;
+    ClientContext context;
+
+    Status status = cstub->ServerRequest(&context, request, &reply);
+    if(status.ok()){
+        return reply.msg();
+    }
+    return "";
 }
