@@ -8,11 +8,14 @@
 #include <memory>
 #include <string>
 #include <stdlib.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
 #include <thread>
 #include <chrono>
+#include <sstream>
+#include <sys/stat.h>
 
 #include "snc.grpc.pb.h"
 
@@ -38,14 +41,14 @@ using snsCoordinator::SNSCoordinator;
 class Synchronizer{
 public:
     Synchronizer(const std::string &p, const int &_id) : port(p), id(_id){}
-    int reachCoordinator(const std::string &cip,const std::string &cp);
+    virtual int reachCoordinator(const std::string &cip,const std::string &cp);
 private:
     int id;
     std::string port;
     std::unique_ptr<SNSCoordinator::Stub> cstub;
 };
 
-int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp){
+int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp) override{
     std::string login_info = cip + ":" + cp;
     cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
 
@@ -62,6 +65,45 @@ int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp
     Status status = cstub->Login(&context, request, &reply);
     if(reply.msg() == "full") return 0;
     return 1; // success
+}
+
+// function that adds all the file names to a vector
+void get_filenames(std::vector<string> &vec, const std::string &directory){
+  DIR *dir;
+  struct dirent *ent;
+  vec.clear();
+  if ((dir = opendir (directory.c_str())) != NULL) {
+    /* print all the files and directories within directory */
+    while ((ent = readdir (dir)) != NULL) {
+      std::string file(ent->d_name);
+      if(file.size() > 4){
+        // check if it says txt at the end
+        if(file[file.size()-1] == 't' && file[file.size()-2] == 'x' && file[file.size()-3] == 't'){
+          file = file.substr(0, file.size()-4);
+          vec.push_back(file);
+        }
+      }
+      //printf ("%s\n", ent->d_name);
+    }
+    closedir (dir);
+  } else {
+    /* could not open directory */
+    std::cerr << "Cannot open file directory\n";
+  }
+}
+
+// function to get the time the file was last updated
+std::string get_updateTime(const std::string &filename){
+  struct stat sb;
+  if(stat(filename.c_str(), &sb) == -1){
+    std::cerr << "Error getting stat\n";
+  }
+
+  std::stringstream ss(ctime(&sb.st_ctime));
+  int i = 0; 
+  string s;
+  while(ss >> s && i++ != 3){}
+  return s;
 }
 
 int main(int argc, char** argv){
