@@ -198,6 +198,25 @@ int find_user(std::string username){
   return -1;
 }
 
+void createFiles(const std::string &username){
+  std::ofstream user_timeline(username + "_timeline.txt");
+  if(!user_timeline.is_open()){
+    std::cerr << "Error: openning timeline file for" + username + "\n";
+  }
+  std::ofstream user_following(username + "_following.txt");
+  if(!user_following.is_open()){
+    std::cerr << "Error: Opening following file for " + username + "\n";
+  }
+  std::ofstream user_followers(username + "_followers.txt");
+  if(!user_followers.is_open()){
+    std::cerr << "Error: opening followers file for " + username + "\n";
+  }
+
+  user_timeline.close();
+  user_following.close();
+  user_followers.close();
+}
+
 class SNSServiceImpl final : public SNSService::Service {
   
   Status List(ServerContext* context, const Request* request, ListReply* list_reply) override {
@@ -258,10 +277,13 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     Client c;
     std::string username = request->username();
+
     int user_index = find_user(username);
     if(user_index < 0){
       c.username = username;
       client_db.push_back(c);
+      // create the files for the user
+      createFiles(username);
       reply->set_msg("Login Successful!");
     }
     else{ 
