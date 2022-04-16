@@ -36,6 +36,20 @@ using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
 
+// structure to hold the file information
+struct File{
+  std::string uname;
+  std::string lastUpdate;
+  bool operator <(const std::string &time2){
+    struct tm tm, tm2;
+    strptime(lastUpdate.c_str(), "%H:%M:%S", &tm);
+    strptime(time2.c_str(), "%H:%M:%S", &tm2);
+    time_t tml = mktime(&tm), tml2 = mktime(&tm2);
+    return (difftime(tml2,tml) < 0);
+  }
+};
+
+
 // implentation for the follower synchronizer
 
 class Synchronizer{
