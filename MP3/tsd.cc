@@ -40,8 +40,10 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
 
@@ -174,7 +176,8 @@ void CServer::createServerStub(const std::string &login_info){
   stub_ = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
 }
 
-CServer * mys; // global variable of server 
+CServer * mys; // global variable of server
+std::string CW_DIR; 
 
 void CServer::ContactCoordinator(){
   // send a constant communication with the coordinator
@@ -360,6 +363,13 @@ void RunServer(std::string port_no) {
   server->Wait();
 }
 
+std::string get_directory(){
+  char buff[256];
+  getcwd(buff, 256);
+  std::string ret(buff);
+  return ret;
+}
+
 int main(int argc, char** argv) {
   
   std::string port = "3010";
@@ -381,7 +391,21 @@ int main(int argc, char** argv) {
 
   mys =  new CServer(host+":"+port, id, t);
   mys->Login(cip, cp);
-  
+  // make the new directory
+  std::string dir = t + "_" + std::to_string(id);
+
+  if((mkdir(dir.c_str(), 0777)) < 0){
+    std::cerr << "Error making directory \n";
+    std::exit(0);
+  }
+
+  CW_DIR = get_directory() + dir;
+
+  if((chdir(CW_DIR.c_str())) < 0){
+    std::cerr << "Error changing direcotry\n";
+    std::exit(0);
+  }
+
   // connect to the coordinator first
   //RunServer(port);
 
