@@ -105,6 +105,7 @@ public:
   void ContactCoordinator();
   void createServerStub(const std::string &login_info);
   std::unique_ptr<SNSService::Stub> stub_;
+  int getID(){return id;}
 private:
   std::string ip_port;
   int id;
@@ -247,20 +248,28 @@ class SNSServiceImpl final : public SNSService::Service {
     }
     std::string username1 = request->username();
     std::string username2 = request->arguments(0);
-    int join_index = find_user(username2);
-    if(join_index < 0 || username1 == username2)
-      reply->set_msg("unkown user name");
-    else{
-      Client *user1 = &client_db[find_user(username1)];
-      Client *user2 = &client_db[join_index];
-      if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) != user1->client_following.end()){
-	reply->set_msg("you have already joined");
-        return Status::OK;
-      }
-      user1->client_following.push_back(user2);
-      user2->client_followers.push_back(user1);
-      reply->set_msg("Follow Successful");
-    }
+    // append the name to following
+    std::ofstream file(username + "_following.txt", std::ios_base::app);
+    file << username2 + " ";
+    file.close();
+
+    // we wont be able to check the users name
+    reply->set_msg("Follow Successful");
+
+  //   int join_index = find_user(username2);
+  //   if(join_index < 0 || username1 == username2)
+  //     reply->set_msg("unkown user name");
+  //   else{
+  //     Client *user1 = &client_db[find_user(username1)];
+  //     Client *user2 = &client_db[join_index];
+  //     if(std::find(user1->client_following.begin(), user1->client_following.end(), user2) != user1->client_following.end()){
+	// reply->set_msg("you have already joined");
+  //       return Status::OK;
+  //     }
+  //     user1->client_following.push_back(user2);
+  //     user2->client_followers.push_back(user1);
+  //     reply->set_msg("Follow Successful");
+  //   }
     return Status::OK; 
   }
   
