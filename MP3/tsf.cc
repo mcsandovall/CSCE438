@@ -153,6 +153,24 @@ std::string get_updateTime(const std::string &filename){
   return s;
 }
 
+// function to get the names of all user who follow certain give user
+std::vector<std::string> getFollowers(const std::string user){
+  std::vector<std::string> followers;
+  std::vector<std::string> users;
+  get_filenames(users, MASTER_DIR);
+
+  for(int i = 0; i < client_db.size(); ++i){
+    // check if the id appears in the following list
+    for(Client* c : client_db[i].following){
+      if(std::to_string(c->id) == user){
+        followers.push_back(std::to_string(c->id));
+      }
+    }
+  }
+  return followers;
+}
+
+
 class SNSFSynchImp final : public  SNSFSynch::Service {
   Status Contact(ServerContext* context, const Message* message, Reply* reply) override{
     // creates a stub for syncher
@@ -168,7 +186,7 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     int follower = request->follower();
     int followed = request->followed();
     // modify the followed file and add the follower
-    std::string dir = MASTER_DIR + "/" + std::to_string(followed) + ".txt";
+    std::string dir = MASTER_DIR + "/" + std::to_string(followed) + "_followers.txt";
     std::ofstream file(dir, std::ios_base::app);
     file << std::to_string(follower) + "\n";
     file.close();
@@ -180,7 +198,7 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     // handles timeline modifying for user
     // get a vector with all the users who follow the list id (username)
     // getFollowers();
-    std::vector<std::string> followers;
+    std::vector<std::string> followers = getFollowers(std::to_string(lrequest->id()));
     // get all the messages from the list
     std::queue<std::string> messages;
     for(std::string msg : lrequest->post()){
