@@ -9,7 +9,9 @@ service SNSFSynch{
     // follow function to add user to following list
     rpc Follow (Request) returns (Reply) {}
     // timeline modifier
-    rpc Timeline (ListRequest) returns (Reply) {} 
+    rpc Timeline (ListRequest) returns (Reply) {}
+    // add user to all user list
+    rpc NewUser (Request) returns (Reply) {} 
 }   
 
 // initial commuincation
