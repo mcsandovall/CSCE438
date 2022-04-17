@@ -88,6 +88,7 @@ struct Client{
 
 Synchronizer * myf = 0;
 std::string MASTER_DIR;
+std::vector<File> file_db;
 std::vector<Client> client_db;
 
 int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp){
@@ -259,22 +260,44 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
   }
 };
 
+void RunServer(std::string server_address){
+    SNSFSynchImp service;
+
+    ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<Server> server(builder.BuildAndStart());
+    std::cout << "Coordinator listening on " << server_address << std::endl;
+
+    server->Wait();
+}
+
 int main(int argc, char** argv){
-    if(argc < 9){
-        std::cerr << "Error: Not enough arguments\n";
-        return -1;
-    }
-    std::string cip, cp, port, host = "0.0.0.1";
-    int id;
-    for(int i = 0; i < argc; ++i){
-        if(std::strcmp(argv[i], "-cip") == 0) cip = argv[i+1];
-        if(std::strcmp(argv[i], "-cp") == 0) cp = argv[i+1];
-        if(std::strcmp(argv[i], "-p") == 0) port = argv[i+1];
-        if(std::strcmp(argv[i], "-id") == 0) id = std::stoi(argv[i+1]);
-    }
-    myf = new Synchronizer(host + ":" + port, id); 
-    if(!myf->reachCoordinator(cip, cp)){
-        std::cerr << "Synchronizer: Coordinator Unreachable\n";
-        std::exit(EXIT_FAILURE);
-    }
+  if(argc < 9){
+      std::cerr << "Error: Not enough arguments\n";
+      return -1;
+  }
+  std::string cip, cp, port, host = "0.0.0.1";
+  int id;
+  for(int i = 0; i < argc; ++i){
+      if(std::strcmp(argv[i], "-cip") == 0) cip = argv[i+1];
+      if(std::strcmp(argv[i], "-cp") == 0) cp = argv[i+1];
+      if(std::strcmp(argv[i], "-p") == 0) port = argv[i+1];
+      if(std::strcmp(argv[i], "-id") == 0) id = std::stoi(argv[i+1]);
+  }
+  myf = new Synchronizer(host + ":" + port, id); 
+  if(!myf->reachCoordinator(cip, cp)){
+      std::cerr << "Synchronizer: Coordinator Unreachable\n";
+      std::exit(EXIT_FAILURE);
+  } 
+  // contact the other coordinators
+  if(myf->contactSynchronizer() == 0){
+    std::cout << "No synchronizers available at this time\n";
+  }
+
+  // make a thread that checks files and calls the other synchronizers
+  // std thread synchworker().detach()
+
+  // run the server
+  RunServer(host + ":" + port);
 }
