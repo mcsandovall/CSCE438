@@ -27,6 +27,9 @@
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
 
+using std::vector;
+using std::string;
+
 using grpc::Status;
 using grpc::Channel;
 using grpc::ClientContext;
@@ -56,10 +59,11 @@ using snsFSynch::SNSFSynch;
 struct File{
   std::string uname;
   std::string lastUpdate;
-  bool operator <(const std::string &time2){
+  vector<string> content;
+  bool operator <(const File &file2){
     struct tm tm, tm2;
     strptime(lastUpdate.c_str(), "%H:%M:%S", &tm);
-    strptime(time2.c_str(), "%H:%M:%S", &tm2);
+    strptime(file2.lastUpdate.c_str(), "%H:%M:%S", &tm2);
     time_t tml = mktime(&tm), tml2 = mktime(&tm2);
     return (difftime(tml2,tml) < 0);
   }
@@ -80,16 +84,55 @@ private:
     std::map<int, std::unique_ptr<SNSFSynch::Stub>> fstubs; // syncher stubs
 };
 
-struct Client{
-  int id;
-  std::vector<Client*> followed;
-  std::vector<Client*> following;
-};
-
 Synchronizer * myf = 0;
-std::string MASTER_DIR;
-std::vector<File> file_db;
-std::vector<Client> client_db;
+string MASTER_DIR;
+std::vector<File* > file_db;
+
+vector<string> getFileContent(const string &filename){
+  vector<string> content;
+  std::ifstream ifs(filename);
+  if(!ifs.is_open()){
+    std::cerr << "Error opening file " + filename + "\n";
+    return content;
+  }
+  string msg;
+  while(!ifs.eof()){
+    std::getline(ifs, msg);
+    content.push_back(msg);
+  }
+  return content;
+}
+
+vector<string> getFollowingList(const string &uname){
+  return getFileContent(MASTER_DIR + uname + "_following.txt");
+}
+
+vector<string> getFollowersList(const string &uname){
+  return getFileContent(MASTER_DIR + uname + "_followers.txt");
+}
+
+vector<string> getOutPost(const string &uname){
+  return getFileContent(MASTER_DIR + uname + "_out.txt");
+}
+
+int contentExist(const vector<string> &vec, const string &content){
+  for(int i = 0; i < vec.size(); ++i){
+    if(vec[i] == content){
+      return i;
+    }
+  }
+  return -1;
+}
+
+vector<string> getUniqueValues(const vector<string> &file1, const vector<string> file2){
+  vector<string> unique;
+  for(string c : file1){
+    if(contentExist(file2, c) == -1){
+      unique.push_back(c);
+    }
+  }
+  return unique;
+}
 
 int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp){
     std::string login_info = cip + ":" + cp;
@@ -173,7 +216,7 @@ void get_filenames(std::vector<std::string> &vec, const std::string &directory){
 }
 
 // function to get the time the file was last updated
-std::string get_updateTime(const std::string &filename){
+string get_updateTime(const std::string &filename){
   struct stat sb;
   if(stat(filename.c_str(), &sb) == -1){
     std::cerr << "Error getting stat\n";
@@ -185,24 +228,6 @@ std::string get_updateTime(const std::string &filename){
   while(ss >> s && i++ != 3){}
   return s;
 }
-
-// function to get the names of all user who follow certain give user
-std::vector<std::string> getFollowers(const std::string user){
-  std::vector<std::string> followers;
-  std::vector<std::string> users;
-  get_filenames(users, MASTER_DIR);
-
-  for(int i = 0; i < client_db.size(); ++i){
-    // check if the id appears in the following list
-    for(Client* c : client_db[i].following){
-      if(std::to_string(c->id) == user){
-        followers.push_back(std::to_string(c->id));
-      }
-    }
-  }
-  return followers;
-}
-
 
 class SNSFSynchImp final : public  SNSFSynch::Service {
   Status Contact(ServerContext* context, const Message* message, Reply* reply) override{
@@ -231,7 +256,7 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     // handles timeline modifying for user
     // get a vector with all the users who follow the list id (username)
     // getFollowers();
-    std::vector<std::string> followers = getFollowers(std::to_string(lrequest->id()));
+    std::vector<std::string> followers = getFollowersList(std::to_string(lrequest->id()));
     // get all the messages from the list
     std::queue<std::string> messages;
     for(std::string msg : lrequest->post()){
@@ -272,6 +297,13 @@ void RunServer(std::string server_address){
     server->Wait();
 }
 
+string get_directory(){
+  char buff[256];
+  getcwd(buff, 256);
+  string ret(buff);
+  return ret;
+}
+
 int main(int argc, char** argv){
   if(argc < 9){
       std::cerr << "Error: Not enough arguments\n";
@@ -285,6 +317,8 @@ int main(int argc, char** argv){
       if(std::strcmp(argv[i], "-p") == 0) port = argv[i+1];
       if(std::strcmp(argv[i], "-id") == 0) id = std::stoi(argv[i+1]);
   }
+  MASTER_DIR = get_directory() + "/master" + std::to_string(id) + "/";
+
   myf = new Synchronizer(host + ":" + port, id); 
   if(!myf->reachCoordinator(cip, cp)){
       std::cerr << "Synchronizer: Coordinator Unreachable\n";
