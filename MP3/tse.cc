@@ -99,7 +99,7 @@ public:
 std::map<int, Cluster> cluster_db;
 
 class SNSCoordinatorImp final : public SNSCoordinator::Service{
-    
+    // Login the server and add it to the cluster
     Status Login(ServerContext* context, const Request* request, Reply* reply) override{
         // log in the server 
         reply->set_msg("SUCCESS");
@@ -202,12 +202,21 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         HeartBeat hb;
         int sid = 0;
         ServerType s_type;
+        time_t lastUpdate, currentUpdate;
         //implement a timing system for communication 10s
         while(stream->Read(&hb)){
-            if(!sid){
+            if(!sid){ // only make the message once
                 // get the current sid
                 sid = hb.sid();
                 s_type = hb.s_type();
+                lastUpdate = google::protobuf::util::TimeUtil::TimestampToTimeT(hb.timestamp());
+            }
+            // get the time from the heartbeat
+            currentUpdate = google::protobuf::util::TimeUtil::TimestampToTimeT(hb.timestamp());
+            double difference = difftime(lastUpdate,currentUpdate);
+            if(difference > 20){
+                // end the connection
+                break;
             }
         }
         // if server disconnects then deactive it
