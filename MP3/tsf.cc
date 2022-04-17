@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 
 #include "snc.grpc.pb.h"
+#include "snf.grpc.pb.h"
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
@@ -29,12 +30,23 @@ using grpc::ClientReader;
 using grpc::ClientReaderWriter;
 using grpc::ClientWriter;
 
-using snsCoordinator::Request;
-using snsCoordinator::Reply;
-using snsCoordinator::HeartBeat;
+using grpc::Server;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using grpc::ServerReader;
+using grpc::ServerReaderWriter;
+using grpc::ServerWriter;
+using grpc::Status;
+
 using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
+
+using snsFSynch::Request;
+using snsFSynch::Message;
+using snsFSynch::Reply;
+using snsFSynch::ListRequest;
+using snsFSynch::SNSFSynch;
 
 // structure to hold the file information
 struct File{
@@ -55,26 +67,26 @@ struct File{
 class Synchronizer{
 public:
     Synchronizer(const std::string &p, const int &_id) : port(p), id(_id){}
-    virtual int reachCoordinator(const std::string &cip,const std::string &cp);
+    int reachCoordinator(const std::string &cip,const std::string &cp);
 private:
     int id;
     std::string port;
     std::unique_ptr<SNSCoordinator::Stub> cstub;
 };
 
-int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp) override{
+int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp){
     std::string login_info = cip + ":" + cp;
     cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
 
     // create a request
-    Request request;
+    snsCoordinator::Request request;
     request.set_requester(RequesterType::SERVER);
     request.set_port_number(port);
     request.set_id(id);
     request.set_server_type(ServerType::SYNCHRONIZER);
 
     ClientContext context;
-    Reply reply;
+    snsCoordinator::Reply reply;
 
     Status status = cstub->Login(&context, request, &reply);
     if(reply.msg() == "full") return 0;
@@ -82,7 +94,7 @@ int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp
 }
 
 // function that adds all the file names to a vector
-void get_filenames(std::vector<string> &vec, const std::string &directory){
+void get_filenames(std::vector<std::string> &vec, const std::string &directory){
   DIR *dir;
   struct dirent *ent;
   vec.clear();
@@ -115,7 +127,7 @@ std::string get_updateTime(const std::string &filename){
 
   std::stringstream ss(ctime(&sb.st_ctime));
   int i = 0; 
-  string s;
+  std::string s;
   while(ss >> s && i++ != 3){}
   return s;
 }

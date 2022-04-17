@@ -27,7 +27,7 @@ tsd: sns.pb.o snc.pb.o sns.grpc.pb.o snc.grpc.pb.o tsd.o
 tse: snc.pb.o snc.grpc.pb.o tse.o
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
-tsf: snc.pb.o snc.grpc.pb.o tsf.o
+tsf: snc.pb.o snc.grpc.pb.o snf.pb.o snf.grpc.pb.o tsf.o
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
 .PRECIOUS: %.grpc.pb.cc
