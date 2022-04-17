@@ -65,7 +65,6 @@ struct File{
   }
 };
 
-
 // implentation for the follower synchronizer
 
 class Synchronizer{
@@ -108,6 +107,39 @@ int Synchronizer::reachCoordinator(const std::string &cip, const std::string &cp
     Status status = cstub->Login(&context, request, &reply);
     if(reply.msg() == "full") return 0;
     return 1; // success
+}
+
+int Synchronizer::contactSynchronizer(){
+  // get the ports from the coordinator and create the stub from their id
+  ClientContext context;
+  snsCoordinator::Request request;
+  request.set_requester(RequesterType::SERVER);
+  request.set_port_number(server_info);
+  request.set_id(id);
+  request.set_server_type(ServerType::SYNCHRONIZER);
+  snsCoordinator::Reply reply;
+
+  Status stat = cstub->ServerRequest(&context, request, &reply);
+  if(!stat.ok()) return -1;
+  // get the server id and the login info from the reply
+  std::string msg(reply.msg());
+  if(msg == "-") return 0; // no other sync
+  // split the msg in two by the dash -
+  int index = msg.find('-');
+  std::string synch1 = msg.substr(0,index);
+  std::string synch2 = msg.substr(index+1, msg.size());
+  if(synch1 != ""){
+    // get the id of the synch and create the stub
+    int sid = synch1[0]; // its the id for the synch
+    std::string s_info = synch1.substr(2, synch1.size());
+    createStub(sid, s_info);
+  }
+  if(synch2 != ""){
+    int sid = synch2[0]; // its the id for the synch
+    std::string s_info = synch2.substr(2, synch2.size());
+    createStub(sid, s_info);
+  }
+  return 1;
 }
 
 void Synchronizer::createStub(const int &id, const std::string &login_info){

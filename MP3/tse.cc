@@ -149,7 +149,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
             // get the id and the server type
             int sid = request->id();
             ServerType t = request->server_type();
-            string server, message;
+            string server, message = "";
             switch (t)
             {
                 case ServerType::MASTER:
@@ -174,14 +174,14 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     synch = sid + 1;
                     if(synch > 3) synch = 1;
                     server = cluster_db[synch].getSynchronizer();
-                    if(server == "") message = "NULL";
-                    else message = server;
+                    if(server != "") message = message = std::to_string(synch) + "=" + server;
 
                     message += "-";
 
                     synch = sid - 1;
                     if(synch == 0) synch = 3;
                     server = cluster_db[synch].getSynchronizer();
+                    if(server != "") message += message = std::to_string(synch) + "=" + server;
 
                     reply->set_msg(message);
                     break;
