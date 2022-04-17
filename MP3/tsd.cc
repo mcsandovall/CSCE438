@@ -41,6 +41,7 @@
 #include <memory>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -180,9 +181,36 @@ void CServer::createServerStub(const std::string &login_info){
 CServer * mys; // global variable of server
 std::string CW_DIR; 
 
+HeartBeat createHeartBeat(const ServerType &t, const int &id){
+  // this function creates a heartbeat for the server
+  HeartBeat hb;
+  hb.set_sid(id);
+  hb.set_s_type(t);
+  google::protobuf::Timestamp* timestamp = new google::protobuf::Timestamp();
+  timestamp->set_seconds(time(NULL));
+  timestamp->set_nanos(0);
+  hb.set_allocated_timestamp(timestamp);
+  return hb;
+}
+
 void CServer::ContactCoordinator(){
   // send a constant communication with the coordinator
+  ClientContext context;
+  HeartBeat hb;
+  
+  // create a detached thread that send the coordinator a message every 10s
+  std::shared_ptr<ClientWriter<HeartBeat>> stream(cstub->ServerCommunicate(&context, &hb));
+  std::thread writer([stream](const ServerType t,const int id){
+    while(true){
+      // send message to the coordinator every 10s
+      HeartBeat h = createHeartBeat(t, id);
+      stream->Write(h);
+      sleep(10);
+    }
+    stream->WritesDone();
+  }, type, id);
 
+  writer.detach();
 }
 
 //Vector that stores every client that has been created
@@ -249,7 +277,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::string username1 = request->username();
     std::string username2 = request->arguments(0);
     // append the name to following
-    std::ofstream file(username + "_following.txt", std::ios_base::app);
+    std::ofstream file(username1 + "_following.txt", std::ios_base::app);
     file << username2 + " ";
     file.close();
 
@@ -381,8 +409,7 @@ class SNSServiceImpl final : public SNSService::Service {
   }
 };
 
-void RunServer(std::string port_no) {
-  std::string server_address = "0.0.0.0:"+port_no;
+void RunServer(std::string server_address) {
   SNSServiceImpl service;
 
   ServerBuilder builder;
@@ -404,7 +431,7 @@ std::string get_directory(){
 int main(int argc, char** argv) {
   
   std::string port = "3010";
-  std::string host =  "127.0.0.1"; // localhost
+  std::string host =  "0.0.0.1"; // localhost
   std::string cip, cp, t;
   int id;
   if(argc < 11){
@@ -421,7 +448,13 @@ int main(int argc, char** argv) {
   }
 
   mys =  new CServer(host+":"+port, id, t);
+  // Login with the coordinator
   mys->Login(cip, cp);
+  // request for the other server slave/master
+  mys->RequestServers();
+  // create communication with the coordinator
+  mys->ContactCoordinator();
+
   // make the new directory
   std::string dir = t + "_" + std::to_string(id);
 
@@ -430,15 +463,17 @@ int main(int argc, char** argv) {
     std::exit(0);
   }
 
+  // gte current direcotry
   CW_DIR = get_directory() + dir;
 
+  // change the directory
   if((chdir(CW_DIR.c_str())) < 0){
     std::cerr << "Error changing direcotry\n";
     std::exit(0);
   }
-
+  
   // connect to the coordinator first
-  //RunServer(port);
+  RunServer(host + ":" + port);
 
   return 0;
 }
