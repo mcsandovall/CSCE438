@@ -240,13 +240,9 @@ void createFiles(const std::string &username){
   if(!user_followers.is_open()){
     std::cerr << "Error: opening followers file for " + username + "\n";
   }
-
-  std::ofstream user_outfile(username + "_out.txt");
-
   user_timeline.close();
   user_following.close();
   user_followers.close();
-  user_outfile.close();
 }
 
 class SNSServiceImpl final : public SNSService::Service {
