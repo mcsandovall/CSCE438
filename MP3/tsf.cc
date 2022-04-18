@@ -57,15 +57,25 @@ using snsFSynch::SNSFSynch;
 
 // structure to hold the file information
 struct File{
+  File(const string &u, const string &lpdt) : uname(u), lastUpdate(lpdt) {}
   std::string uname;
   std::string lastUpdate;
   vector<string> content;
   bool operator <(const File &file2){
-    struct tm tm, tm2;
+    struct tm tm;
     strptime(lastUpdate.c_str(), "%H:%M:%S", &tm);
-    strptime(file2.lastUpdate.c_str(), "%H:%M:%S", &tm2);
-    time_t tml = mktime(&tm), tml2 = mktime(&tm2);
-    return (difftime(tml2,tml) < 0);
+    time_t tml = mktime(&tm);
+    strptime(file2.lastUpdate.c_str(), "%H:%M:%S", &tm);
+    time_t tml2 = mktime(&tm);
+    return (difftime(tml,tml2) < 0);
+  }
+  bool operator <(const string &time){
+    struct tm tm;
+    strptime(lastUpdate.c_str(), "%H:%M:%S", &tm);
+    time_t tml = mktime(&tm);
+    strptime(time.c_str(), "%H:%M:%S", &tm);
+    time_t tml2 = mktime(&tm);
+    return (difftime(tml,tml2) < 0);
   }
 };
 
@@ -77,6 +87,7 @@ public:
     int reachCoordinator(const std::string &cip,const std::string &cp);
     int contactSynchronizer();
     void createStub(const int &id, const std::string &login_info);
+    void sendNewUser(const int &id);
 private:
     int id;
     std::string server_info;
@@ -87,6 +98,16 @@ private:
 Synchronizer * myf = 0;
 string MASTER_DIR;
 std::vector<File* > file_db;
+
+// finds file in the database
+File * findFile(const string &filename){
+  for(File* f : file_db){
+    if(f->uname == filename){
+      return f;
+    }
+  }
+  return nullptr;
+}
 
 vector<string> getFileContent(const string &filename){
   vector<string> content;
@@ -190,6 +211,31 @@ void Synchronizer::createStub(const int &id, const std::string &login_info){
   // make the stub at that index of the map
   fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
 }
+
+void Synchronizer::sendNewUser(const int &id){
+  // send the new user to the other synch if it exist
+  ClientContext context;
+  Request request;
+  request.set_follower(id);
+  Reply reply;
+  int sid = id + 1;
+  if(sid == 4) sid = 1;
+  if(fstubs[sid]){
+    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error: sending new user to synchronizer";
+    }
+  }
+  sid = id - 1;
+  if(sid == 0) sid = 3;
+  if(fstubs[sid]){
+    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error: sending new user to synchronizer";
+    }
+  }
+}
+
 // function that adds all the file names to a vector
 void get_filenames(std::vector<std::string> &vec, const std::string &directory){
   DIR *dir;
@@ -220,6 +266,7 @@ string get_updateTime(const std::string &filename){
   struct stat sb;
   if(stat(filename.c_str(), &sb) == -1){
     std::cerr << "Error getting stat\n";
+    return "";
   }
 
   std::stringstream ss(ctime(&sb.st_ctime));
@@ -227,6 +274,33 @@ string get_updateTime(const std::string &filename){
   std::string s;
   while(ss >> s && i++ != 3){}
   return s;
+}
+
+void updateAllUsersFile(Synchronizer * synch){
+  File* all = findFile("all_users");
+  if(!all){
+    //get the update time and make a new file
+    string updt = get_updateTime("all_users.txt");
+    if(updt == ""){ // file has not been created
+      std::ofstream ofs("all_users.txt");
+      ofs.close();
+      updt = get_updateTime("all_users.txt");
+    }
+    file_db.push_back(new File("all_users", updt));
+  }
+  // else get the time difference and if it the new one is more recent update it
+  string updt = get_updateTime("all_users.txt");
+  if((*all) < updt){ // there was an update
+    vector<string> users =  getFileContent("all_users.txt");
+    users = getUniqueValues(users, all->content);
+    // add all the new values to the file and send them to the other synchronizers
+    std::ofstream file("all_users.txt");
+    for(const string u : users){
+      file << u + "\n";
+      synch->sendNewUser(std::stoi(u));
+    }
+    file.close();
+  }
 }
 
 class SNSFSynchImp final : public  SNSFSynch::Service {
@@ -281,9 +355,22 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     std::ofstream file("all_users.txt", std::ios_base::app);
     file << request->follower() << "\n";
     file.close();
+    reply->set_msg("Success");
     return Status::OK;
   }
 };
+
+void fsynchworker(Synchronizer * synch){
+  while(true){
+    // get the names of all the files
+    vector<string> fnames;
+    get_filenames(fnames, MASTER_DIR);
+    
+    // update the all users file
+    updateAllUsersFile(synch);
+
+  }
+}
 
 void RunServer(std::string server_address){
     SNSFSynchImp service;
