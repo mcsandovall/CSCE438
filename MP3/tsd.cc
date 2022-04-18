@@ -116,6 +116,21 @@ private:
 
 // functions for the server
 
+std::vector<std::string> getFileContent(const std::string &filename){
+  std::vector<std::string> content;
+  std::ifstream ifs(filename);
+  if(!ifs.is_open()){
+    std::cerr << "Error opening file " + filename + "\n";
+    return content;
+  }
+  std::string msg;
+  while(!ifs.eof()){
+    std::getline(ifs, msg);
+    content.push_back(msg);
+  }
+  return content;
+}
+
 void CServer::Login(const std::string &cip, const std::string &cp){
   // send the current server information to the coordinator
   cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(ip_port, grpc::InsecureChannelCredentials())));
@@ -338,63 +353,96 @@ class SNSServiceImpl final : public SNSService::Service {
   Status Timeline(ServerContext* context, 
 		ServerReaderWriter<Message, Message>* stream) override {
     Message message;
+    std::string username;
     Client *c;
-    while(stream->Read(&message)) {
-      std::string username = message.username();
-      int user_index = find_user(username);
-      c = &client_db[user_index];
- 
-      //Write the current message to "username.txt"
-      std::string filename = username+".txt";
-      std::ofstream user_file(filename,std::ios::app|std::ios::out|std::ios::in);
+
+    if(stream->Read(&message)){
+      username = message.username();
+    }
+
+    int index = find_user(username);
+    c = &client_db[index];
+
+    // TODO: make a thread to check the user timeline file and write to the stream
+    std::thread writer([stream](Client* c){
+      while(c->connected){
+        std::string filename = c->username + "_timeline.txt";
+        std::vector<std::string> posts = getFileContent(filename);
+        if(posts.size() != 0){
+          for(std::string p : posts){
+            // get info from each file
+            
+          }
+        }
+      }
+    },c);
+    // TODO: while loop that reads messages and puts them in the out.txt file
+    while(stream->Read(&message)){
+      // read message and add it to the out.txt file
+      std::ofstream ofs("out.txt", std::ios_base::app);
       google::protobuf::Timestamp temptime = message.timestamp();
       std::string time = google::protobuf::util::TimeUtil::ToString(temptime);
       std::string fileinput = time+" :: "+message.username()+":"+message.msg()+"\n";
-      //"Set Stream" is the default message from the client to initialize the stream
-      if(message.msg() != "Set Stream")
-        user_file << fileinput;
-      //If message = "Set Stream", print the first 20 chats from the people you follow
-      else{
-        if(c->stream==0)
-      	  c->stream = stream;
-        std::string line;
-        std::vector<std::string> newest_twenty;
-        std::ifstream in(username+"following.txt");
-        int count = 0;
-        //Read the last up-to-20 lines (newest 20 messages) from userfollowing.txt
-        while(getline(in, line)){
-          if(c->following_file_size > 20){
-	    if(count < c->following_file_size-20){
-              count++;
-	      continue;
-            }
-          }
-          newest_twenty.push_back(line);
-        }
-        Message new_msg; 
- 	//Send the newest messages to the client to be displayed
-	for(int i = 0; i<newest_twenty.size(); i++){
-	  new_msg.set_msg(newest_twenty[i]);
-          stream->Write(new_msg);
-        }    
-        continue;
-      }
-      //Send the message to each follower's stream
-      std::vector<Client*>::const_iterator it;
-      for(it = c->client_followers.begin(); it!=c->client_followers.end(); it++){
-        Client *temp_client = *it;
-      	if(temp_client->stream!=0 && temp_client->connected)
-	  temp_client->stream->Write(message);
-        //For each of the current user's followers, put the message in their following.txt file
-        std::string temp_username = temp_client->username;
-        std::string temp_file = temp_username + "following.txt";
-	std::ofstream following_file(temp_file,std::ios::app|std::ios::out|std::ios::in);
-	following_file << fileinput;
-        temp_client->following_file_size++;
-	std::ofstream user_file(temp_username + ".txt",std::ios::app|std::ios::out|std::ios::in);
-        user_file << fileinput;
-      }
+      ofs << fileinput;
+      ofs.close();
     }
+
+  //   while(stream->Read(&message)) {
+  //     username = message.username();
+  //     int user_index = find_user(username);
+  //     c = &client_db[user_index];
+ 
+  //     //Write the current message to "username.txt"
+  //     std::string filename = username+".txt";
+  //     std::ofstream user_file(filename,std::ios::app|std::ios::out|std::ios::in);
+  //     google::protobuf::Timestamp temptime = message.timestamp();
+  //     std::string time = google::protobuf::util::TimeUtil::ToString(temptime);
+  //     std::string fileinput = time+" :: "+message.username()+":"+message.msg()+"\n";
+  //     //"Set Stream" is the default message from the client to initialize the stream
+  //     if(message.msg() != "Set Stream")
+  //       user_file << fileinput;
+  //     //If message = "Set Stream", print the first 20 chats from the people you follow
+  //     else{
+  //       if(c->stream==0)
+  //     	  c->stream = stream;
+  //       std::string line;
+  //       std::vector<std::string> newest_twenty;
+  //       std::ifstream in(username+"following.txt");
+  //       int count = 0;
+  //       //Read the last up-to-20 lines (newest 20 messages) from userfollowing.txt
+  //       while(getline(in, line)){
+  //         if(c->following_file_size > 20){
+	//     if(count < c->following_file_size-20){
+  //             count++;
+	//       continue;
+  //           }
+  //         }
+  //         newest_twenty.push_back(line);
+  //       }
+  //       Message new_msg; 
+ 	// //Send the newest messages to the client to be displayed
+	// for(int i = 0; i<newest_twenty.size(); i++){
+	//   new_msg.set_msg(newest_twenty[i]);
+  //         stream->Write(new_msg);
+  //       }    
+  //       continue;
+  //     }
+  //     //Send the message to each follower's stream
+  //     std::vector<Client*>::const_iterator it;
+  //     for(it = c->client_followers.begin(); it!=c->client_followers.end(); it++){
+  //       Client *temp_client = *it;
+  //     	if(temp_client->stream!=0 && temp_client->connected)
+	//   temp_client->stream->Write(message);
+  //       //For each of the current user's followers, put the message in their following.txt file
+  //       std::string temp_username = temp_client->username;
+  //       std::string temp_file = temp_username + "following.txt";
+	// std::ofstream following_file(temp_file,std::ios::app|std::ios::out|std::ios::in);
+	// following_file << fileinput;
+  //       temp_client->following_file_size++;
+	// std::ofstream user_file(temp_username + ".txt",std::ios::app|std::ios::out|std::ios::in);
+  //       user_file << fileinput;
+  //     }
+  //   }
     //If the client disconnected from Chat Mode, set connected to false
     c->connected = false;
     return Status::OK;
