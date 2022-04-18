@@ -131,6 +131,45 @@ std::vector<std::string> getFileContent(const std::string &filename){
   return content;
 }
 
+void getFileMessages(const std::string &filename, std::std::vector<Message> messages){
+   std::ifstream ifs(filename);
+    if(!ifs.is_open()){
+      std::cerr << "Error: Can not open filename " + filename << std::endl;
+    }
+    
+    // get all the post in the file
+    Message msg;
+    int index = 0, a_index = 0; 
+    std::string post, tm, message;
+    time_t utc;
+    struct std::tm tim;
+    Timestamp timestamp;
+    std::string username;
+    while(!ifs.eof()){
+      std::getline(ifs,post);
+      if(post.empty())continue;
+      while(post[++index] != '-'){}
+      username = post.substr(0, index);
+      a_index = index + 1;
+      while(post[++a_index] != '-'){}
+      message = post.substr(index+1, a_index-1);
+      tm = post.substr(a_index+1, post.size() - a_index);
+      index = 0; // reset the index
+      
+      msg.set_username(username);
+      msg.set_msg(message);
+      
+      std::istringstream ss(tm);
+      ss >> std::get_time(&tim, "%a %b %d %H:%M:%S %Y");
+      utc = mktime(&tim);
+      timestamp = google::protobuf::util::TimeUtil::TimeTToTimestamp(utc);
+      msg.set_allocated_timestamp(&timestamp);
+      
+      messages.push_back(msg);
+      msg.release_timestamp();
+    }
+}
+
 void CServer::Login(const std::string &cip, const std::string &cp){
   // send the current server information to the coordinator
   cstub = std::unique_ptr<SNSCoordinator::Stub>(SNSCoordinator::NewStub(grpc::CreateChannel(ip_port, grpc::InsecureChannelCredentials())));
@@ -367,14 +406,17 @@ class SNSServiceImpl final : public SNSService::Service {
     std::thread writer([stream](Client* c){
       while(c->connected){
         std::string filename = c->username + "_timeline.txt";
-        std::vector<std::string> posts = getFileContent(filename);
-        if(posts.size() != 0){
-          for(std::string p : posts){
-            // get info from each file
-            
+        std::std::vector<Message> posts;
+        getFileMessages(filename, posts);
+        
+        if(posts.size() > 0){
+          // send all the post from the file
+          for(int i = 0; i < posts.size(); ++i){
+            stream->Write(posts[i]);
           }
         }
       }
+      stream->WritesDone();
     },c);
     // TODO: while loop that reads messages and puts them in the out.txt file
     while(stream->Read(&message)){
@@ -382,7 +424,7 @@ class SNSServiceImpl final : public SNSService::Service {
       std::ofstream ofs("out.txt", std::ios_base::app);
       google::protobuf::Timestamp temptime = message.timestamp();
       std::string time = google::protobuf::util::TimeUtil::ToString(temptime);
-      std::string fileinput = time+" :: "+message.username()+":"+message.msg()+"\n";
+      std::string fileinput = time+"-"+message.username()+"-"+message.msg()+"\n";
       ofs << fileinput;
       ofs.close();
     }
