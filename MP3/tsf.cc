@@ -486,6 +486,8 @@ int main(int argc, char** argv){
 
   // make a thread that checks files and calls the other synchronizers
   // std thread synchworker().detach()
+  std::thread worker(fsynchworker, myf);
+  worker.detach();
 
   // run the server
   RunServer(host + ":" + port);
