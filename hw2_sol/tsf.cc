@@ -212,7 +212,7 @@ int Synchronizer::contactSynchronizer(){
     createStub(sid, s_info);
   }
   // create a own synchronizer with id
-  createStub(id, port_number);
+  createStub(id, server_info);
   return 1;
 }
 
@@ -431,20 +431,36 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
   }
 };
 
+vector<string> makeUnique(const vector<string> &vec){
+  vector<string> unique;
+  for(string u : vec){
+    if(contentExist(unique,u) == -1){
+      unique.push_back(u);
+    }
+  }
+  return unique;
+}
+
 void fsynchworker(Synchronizer * synch){
   while(true){
     std::cout << "Running Cycle\n";
     // get the names of all the files
     vector<string> fnames;
     get_filenames(fnames, true);
+    fnames = makeUnique(fnames);
+
+    for(std::string n : fnames){
+      std::cout << n << std::endl;
+    }
+    
     // update the all user file
-    updateAllUsersFile(synch, fnames);
-    // check if there was a change in the following files
-    monitorFollowingFiles(synch, fnames);
-    // check changes in the timeline
-    monitorTimelineChanges(synch, fnames);
-    // sleep for 30s
-    sleep(30);
+    // updateAllUsersFile(synch, fnames);
+    // // check if there was a change in the following files
+    // monitorFollowingFiles(synch, fnames);
+    // // check changes in the timeline
+    // monitorTimelineChanges(synch, fnames);
+    // // sleep for 30s
+    sleep(3);
   }
 }
 

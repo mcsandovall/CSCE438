@@ -144,10 +144,10 @@ void getFileMessages(const std::string &filename, std::vector<Message> &messages
     while(!ifs.eof()){
       std::getline(ifs,post);
       if(post.empty())continue;
-      while(post[++index] != '-'){}
+      while(post[++index] != ';'){}
       username = post.substr(0, index);
       a_index = index + 1;
-      while(post[++a_index] != '-'){}
+      while(post[++a_index] != ';'){}
       message = post.substr(index+1, a_index-1);
       tm = post.substr(a_index+1, post.size() - a_index);
       index = 0; // reset the index
@@ -449,7 +449,7 @@ class SNSServiceImpl final : public SNSService::Service {
       std::ofstream ofs("out.txt", std::ios_base::app);
       google::protobuf::Timestamp temptime = message.timestamp();
       std::string time = google::protobuf::util::TimeUtil::ToString(temptime);
-      std::string fileinput = time+"-"+message.username()+"-"+message.msg();
+      std::string fileinput = time+";"+message.username()+";"+message.msg();
       ofs << fileinput;
       ofs.close();
 
