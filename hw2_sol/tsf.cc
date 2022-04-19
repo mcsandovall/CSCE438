@@ -183,21 +183,44 @@ int Synchronizer::contactSynchronizers(){
   return 1;
 }
 
+void Synchronizer::createStub(const int &id, const string &login_info){
+  if(!fstubs[id]) fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+}
+
 class SNSFSynchImp final : public  SNSFSynch::Service {
   Status Contact(ServerContext* context, const Message* message, Reply* reply) override{
     // creates a stub for syncher
+    int sid = message->id();
+    string log_info = message->server_info();
+    if(myf) myf->createStub(sid, log_info);
     return Status::OK;
   }
 
   Status Follow(ServerContext* context, const Request* request, Reply* reply) override{
+    // open the file for the follower
+    string follower = std::to_string(request->follower());
+    string followed = std::to_string(request->followed());
+    std::ofstream ofs(followed + "_followers.txt", std::ios_base::app);
+    ofs << follower + "\n";
+    ofs.close();
     return Status::OK;
   }
 
   Status Timeline(ServerContext* context, const TimelineMsg* lrequest, Reply* reply) override{
+    // add the timeline msg to the timeline
+    string user = std::to_string(lrequest->id());
+    std::ofstream ofs(user+"_timeline.txt");
+    ofs <<lrequest->post() + "\n";
+    ofs.close();
     return Status::OK;
   }
 
   Status NewUser(ServerContext* context, const Request* request, Reply* reply) override{
+    // add the user to all users txt
+    string user = std::to_string(request->follower());
+    std::ofstream ofs("all_users.txt");
+    ofs << user + "\n";
+    ofs.close();
     return Status::OK;
   }
 };
