@@ -329,7 +329,7 @@ vector<string> updateFile(const string &filename){
 string getUsernameFromMessage(const string &msg){
   // changed the way they go into the file
   int index = msg.find('-');
-  uname = msg.substr(index+1, msg.size());
+  string uname = msg.substr(index+1, msg.size());
   index = uname.find('-');
   uname = uname.substr(0, index);
   return uname;

@@ -44,10 +44,11 @@
 #include <thread>
 #include <stdlib.h>
 #include <unistd.h>
+#include <iomanip>
 #include <stdio.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
-
+#include <sstream>
 #include "sns.grpc.pb.h"
 #include "snc.grpc.pb.h"
 
@@ -131,7 +132,7 @@ std::vector<std::string> getFileContent(const std::string &filename){
   return content;
 }
 
-void getFileMessages(const std::string &filename, std::std::vector<Message> messages){
+void getFileMessages(const std::string &filename, std::vector<Message> messages){
    std::ifstream ifs(filename);
     if(!ifs.is_open()){
       std::cerr << "Error: Can not open filename " + filename << std::endl;
@@ -406,7 +407,7 @@ class SNSServiceImpl final : public SNSService::Service {
     std::thread writer([stream](Client* c){
       while(c->connected){
         std::string filename = c->username + "_timeline.txt";
-        std::std::vector<Message> posts;
+        std::vector<Message> posts;
         getFileMessages(filename, posts);
         
         if(posts.size() > 0){
@@ -416,7 +417,7 @@ class SNSServiceImpl final : public SNSService::Service {
           }
         }
       }
-      stream->WritesDone();
+      
     },c);
     // TODO: while loop that reads messages and puts them in the out.txt file
     while(stream->Read(&message)){
@@ -469,7 +470,6 @@ class SNSServiceImpl final : public SNSService::Service {
   //       }    
   //       continue;
   //     }
-  //     //Send the message to each follower's stream
   //     std::vector<Client*>::const_iterator it;
   //     for(it = c->client_followers.begin(); it!=c->client_followers.end(); it++){
   //       Client *temp_client = *it;

@@ -302,6 +302,11 @@ void Client::Timeline(const std::string& username) {
 
     std::shared_ptr<ClientReaderWriter<Message, Message>> stream(
             stub_->Timeline(&context));
+            
+    // send an inital messsage to gain the username and start the thread
+    Message msg;
+    msg.set_username(username);
+    stream->Write(msg);
 
     //Thread used to read chat messages and send them to the server
     std::thread writer([username, stream]() {
