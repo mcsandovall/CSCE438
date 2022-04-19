@@ -520,23 +520,25 @@ std::string get_directory(){
 int main(int argc, char** argv) {
   
   std::string port = "3010";
-  std::string host =  "0.0.0.1"; // localhost
-  std::string cip, cp, t;
-  int id;
+  std::string host =  "127.0.0.1"; // localhost
+  std::string cip, cp, t, id;
   if(argc < 11){
     std::cerr << "Not enough arguments\n";
     std::exit(0);
   }
 
   for(int i = 1; i < argc; ++i){
-    if(std::strcmp(argv[i], "-cip")) cip =  argv[i+1];
-    if(std::strcmp(argv[i], "-cp")) cp = argv[i+1];
-    if(std::strcmp(argv[i], "-p")) port = argv[i+1];
-    if(std::strcmp(argv[i], "-id")) id = std::stoi(argv[i+1]);
-    if(std::strcmp(argv[i], "-t")) t = argv[i+1];
+    if(std::strcmp(argv[i], "-cip") == 0) cip =  argv[i+1];
+    if(std::strcmp(argv[i], "-cp") == 0) cp = argv[i+1];
+    if(std::strcmp(argv[i], "-p") == 0) port = argv[i+1];
+    if(std::strcmp(argv[i], "-id") == 0) id = argv[i+1];
+    if(std::strcmp(argv[i], "-t") == 0) t = argv[i+1];
   }
 
-  mys =  new CServer(host+":"+port, id, t);
+  std::cout << cip << " " << cp << " " << port <<
+  " " << id << " " << t << std::endl;
+  return 0;
+  mys =  new CServer(host+":"+port, std::stoi(id), t);
   // Login with the coordinator
   mys->Login(cip, cp);
   // request for the other server slave/master
@@ -545,7 +547,7 @@ int main(int argc, char** argv) {
   mys->ContactCoordinator();
 
   // make the new directory
-  std::string dir = t + "_" + std::to_string(id);
+  std::string dir = t + "_" + id;
 
   if((mkdir(dir.c_str(), 0777)) < 0){
     std::cerr << "Error making directory \n";

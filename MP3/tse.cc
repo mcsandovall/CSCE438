@@ -45,7 +45,7 @@ int cid; // cluster id
 string master_port, slave_port, synchronizer_port;
 public:
     Cluster() : cid(0), master_port(""), slave_port(""), synchronizer_port(""){}
-    Cluster(const int &id) : cid(id), master_port(""), slave_port(""), synchronizer_port(nullptr){}
+    Cluster(const int &id) : cid(id), master_port(""), slave_port(""), synchronizer_port(""){}
     ~Cluster(){}
     int assignPort(string port, ServerType t){
         // the port is assgined upon availibility 1 success 0 fail
@@ -226,7 +226,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
 };
 
 void RunServer(std::string port_no){
-    std::string server_address = "0.0.0.0:"+port_no;
+    std::string server_address = "127.0.0.1:"+port_no;
     SNSCoordinatorImp service;
 
     ServerBuilder builder;
