@@ -100,8 +100,8 @@ private:
 
 Synchronizer * myf;
 string MASTER_DIR;
-std::vector<File* > file_db;
-vector<string> user_db;
+vector<File* > file_db;
+vector<string> client_db;
 
 int Synchronizer::reachCoordinator(const string &cip, const string &cp){
   string login_info = cip +":"+cp;
@@ -185,6 +185,54 @@ int Synchronizer::contactSynchronizers(){
 
 void Synchronizer::createStub(const int &id, const string &login_info){
   if(!fstubs[id]) fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+}
+
+vector<string> getDirectoryFiles(const string &dire, bool names = false){
+  vector<string> content;
+  DIR *dir;
+  struct dirent *ent;
+  if ((dir = opendir (dire.c_str())) != NULL) {
+    /* print all the files and directories within directory */
+    while ((ent = readdir (dir)) != NULL) {
+      std::string file(ent->d_name);
+      if(file.size() > 4){
+        // check if it says txt at the end
+        if(file[file.size()-1] == 't' && file[file.size()-2] == 'x' && file[file.size()-3] == 't'){
+          file = file.substr(0, file.size()-4);
+          if(names){
+            int index = file.find('_');
+            file = file.substr(0,index);
+          }
+          content.push_back(file);
+        }
+      }
+      //printf ("%s\n", ent->d_name);
+    }
+    closedir (dir);
+  } else {
+    /* could not open directory */
+    std::cerr << "Cannot open file directory\n";
+  }
+  return content;
+}
+
+int contentExist(const string &content, const vector<string> &vec){
+  for(int i = 0; i < vec.size();++i){
+    if(vec[i] == content){
+      return i;
+    }
+  }
+  return -1;
+}
+
+vector<string> makeUnique(const vector<string> &vec){
+  vector<string> unique;
+  for(string e : vec){
+    if(contentExist(e, unique) < 0){
+      unique.push_back(e);
+    }
+  }
+  return unique;
 }
 
 class SNSFSynchImp final : public  SNSFSynch::Service {
