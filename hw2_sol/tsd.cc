@@ -433,7 +433,7 @@ class SNSServiceImpl final : public SNSService::Service {
         for(int i = 0; i < posts.size() && i < 20; ++i){
           stream->Write(posts[i]);
         }
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(10));
       }
     },c);
 

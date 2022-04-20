@@ -136,13 +136,13 @@ int Synchronizer::createSynchronizers(){
     std::cerr << "Error: Getting Synchronizers\n";
     return -1;
   }
-
   // parse the reply to get the synchronizers ip
   int index = reply.msg().find('-');
   int count = 0;
   string login_info = reply.msg().substr(0,index);
   if(login_info != ""){
     ++count;
+    std::cout << login_info << std::endl;
     int sid = id + 1;
     if(sid > 3) sid = 1;
     fstubs[sid] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
@@ -200,6 +200,7 @@ void Synchronizer::sendNewUser(const int &id){
     if(!stat.ok()){
       std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
     }
+    std::cout << reply.msg() << std::endl;
   }
 
   sid = id -1;
@@ -209,6 +210,7 @@ void Synchronizer::sendNewUser(const int &id){
     if(!stat.ok()){
       std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
     }
+    std::cout << reply.msg() << std::endl;
   }
 }
 
@@ -265,7 +267,7 @@ vector<string> getDirectoryFiles(const string &dire, bool names = false){
           if(names){
             int index = file.find('_');
             file = file.substr(0,index);
-            if(file == "all" || file == "out") continue;
+            if(file == "all" || file == "out" || file=="current") continue;
           }
           content.push_back(file);
         }
@@ -343,7 +345,9 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     // creates a stub for syncher
     int sid = message->id();
     string log_info = message->server_info();
+    std::cout << "Synchronizer " << sid << " reached on login: " << log_info <<std::endl;
     if(myf) myf->createStub(sid, log_info);
+    reply->set_msg("Contacting Successful");
     return Status::OK;
   }
 
@@ -351,27 +355,30 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     // open the file for the follower
     string follower = std::to_string(request->follower());
     string followed = std::to_string(request->followed());
-    std::ofstream ofs(followed + "_followers.txt", std::ios_base::app);
+    std::ofstream ofs(MASTER_DIR +followed + "_followers.txt", std::ios_base::app);
     ofs << follower + "\n";
     ofs.close();
+    reply->set_msg("Follow Successful");
     return Status::OK;
   }
 
   Status Timeline(ServerContext* context, const TimelineMsg* lrequest, Reply* reply) override{
     // add the timeline msg to the timeline
     string user = std::to_string(lrequest->id());
-    std::ofstream ofs(user+"_timeline.txt", std::ios_base::app);
+    std::ofstream ofs(MASTER_DIR + user+"_timeline.txt", std::ios_base::app);
     ofs << lrequest->post() + "\n";
     ofs.close();
+    reply->set_msg("Timeline Successful");
     return Status::OK;
   }
 
   Status NewUser(ServerContext* context, const Request* request, Reply* reply) override{
     // add the user to all users txt
     string user = std::to_string(request->follower());
-    std::ofstream ofs("all_users.txt");
+    std::ofstream ofs(MASTER_DIR+"all_users.txt", std::ios_base::app);
     ofs << user + "\n";
     ofs.close();
+    reply->set_msg("New User Successful");
     return Status::OK;
   }
 };
@@ -406,7 +413,7 @@ File * findFile(const string &filename){
 
 void updateAllUsers(Synchronizer* sync){
   // find the file and compare
-  std::cout << "Updating all_users....\n";
+  //std::cout << "Updating all_users....\n";
   string filename = MASTER_DIR + "all_users.txt";
   File * f = findFile(filename);
   if(!f){
@@ -424,19 +431,23 @@ void updateAllUsers(Synchronizer* sync){
     }
     return;
   }
+
   // else the file exist then get the differnce from the current file and the on db
   vector<string> content = getFileContent(filename);
   content = getDiffernce(f->content, content);
   // update the current file and send the differnce to other syncs
-  f->content = content;
   for(string u : content){
     if(u=="")continue;
-    sync->sendNewUser(std::stoi(u));
+    std::cout << u << std::endl;
+    if(contentExist(u,f->content) == -1){
+      f->content.push_back(u);
+      sync->sendNewUser(std::stoi(u));
+    }
   }
 }
 
 void updateFollowingFiles(const vector<string> &fnames, Synchronizer * sync){
-  std::cout << "Updating following files....\n";
+  //std::cout << "Updating following files....\n";
   // check if the file else make a new file
   for(string uname : fnames){
     if(uname=="")continue;
@@ -456,9 +467,10 @@ void updateFollowingFiles(const vector<string> &fnames, Synchronizer * sync){
       // compare the content of the file
       vector<string> content = getFileContent(filename);
       content = getDiffernce(f->content, content);
-      for(string f : content){
-        if(f=="")continue;
-        sync->sendFollowRequest(std::stoi(uname), std::stoi(f));
+      for(string c : content){
+        if(c=="")continue;
+        f->content.push_back(c);
+        sync->sendFollowRequest(std::stoi(uname), std::stoi(c));
       }
     }
   }
@@ -472,7 +484,7 @@ string getUsernameFromPost(const string & post){
 }
 
 void updateTimeline(const vector<string> unames, Synchronizer* sync){
-  std::cout << "Updating Timeline...\n";
+  //std::cout << "Updating Timeline...\n";
   // get the content from out.txt
   vector<string> content = getFileContent(MASTER_DIR +"out.txt");
   std::ofstream ofs(MASTER_DIR + "out.txt");
@@ -506,7 +518,7 @@ void fsynchWorker(Synchronizer * fsync){
     updateTimeline(fnames, fsync);
 
     //sleep
-    sleep(3);
+    sleep(10);
   }
 }
 
@@ -530,6 +542,10 @@ int main(int argc, char** argv){
     }
   MASTER_DIR = get_directory() + "/master_" + id + "/";
 
+  // make the run server into a thread an detach it
+  std::thread server(RunServer, host +":"+port);
+  server.detach();
+
   myf = new Synchronizer(host + ":" + port, std::stoi(id)); 
   if(!myf->reachCoordinator(cip, cp)){
       std::cerr << "Synchronizer: Coordinator Unreachable\n";
@@ -538,7 +554,7 @@ int main(int argc, char** argv){
 
   // contact the other coordinators
   int count;
-  if(count = (myf->createSynchronizers()) < 0){
+  if((count = myf->createSynchronizers()) < 0){
     std::cerr << "Error: Reacher other synchronizers\n";
   }
   std::cout << "Synchronizers reached: " << count << std::endl;
@@ -551,9 +567,11 @@ int main(int argc, char** argv){
   // // std thread synchworker().detach()
   // std::thread worker(fsynchworker, myf);
   // worker.detach();
-  std::thread worker(fsynchWorker, myf);
-  worker.detach();
+  fsynchWorker(myf);
+  // std::thread worker(fsynchWorker, myf);
+  // worker.detach();
 
   // run the server
-  RunServer(host + ":" + port);
+  //RunServer(host + ":" + port);
+  return 0;
 }
