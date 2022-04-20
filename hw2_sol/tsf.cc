@@ -233,7 +233,7 @@ void Synchronizer::sendTimelineMsg(const int &ids, const string &post){
   int sid = (ids % 3) + 1;
   if(sid == id){
     std::ofstream ofs(MASTER_DIR + std::to_string(ids) + "_timeline.txt", std::ios_base::app);
-    ofs << post;
+    ofs << post + "\n";
     ofs.close();
   }else{
     if(fstubs[sid]){
@@ -360,8 +360,8 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
   Status Timeline(ServerContext* context, const TimelineMsg* lrequest, Reply* reply) override{
     // add the timeline msg to the timeline
     string user = std::to_string(lrequest->id());
-    std::ofstream ofs(user+"_timeline.txt");
-    ofs <<lrequest->post() + "\n";
+    std::ofstream ofs(user+"_timeline.txt", std::ios_base::app);
+    ofs << lrequest->post() + "\n";
     ofs.close();
     return Status::OK;
   }
@@ -475,6 +475,8 @@ void updateTimeline(const vector<string> unames, Synchronizer* sync){
   std::cout << "Updating Timeline...\n";
   // get the content from out.txt
   vector<string> content = getFileContent(MASTER_DIR +"out.txt");
+  std::ofstream ofs(MASTER_DIR + "out.txt");
+  ofs.close();
   for(string post : content){
     if(post=="")continue;
     string u = getUsernameFromPost(post);
@@ -535,9 +537,11 @@ int main(int argc, char** argv){
   } 
 
   // contact the other coordinators
-  if(myf->createSynchronizers() < 0){
+  int count;
+  if(count = (myf->createSynchronizers()) < 0){
     std::cerr << "Error: Reacher other synchronizers\n";
   }
+  std::cout << "Synchronizers reached: " << count << std::endl;
 
   if(myf->contactSynchronizers() < 0){
     std::cerr << "Error: Contacting Sychronizers\n";

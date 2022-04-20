@@ -332,11 +332,13 @@ class SNSServiceImpl final : public SNSService::Service {
     std::vector<std::string> allusers = getFileContent("all_users.txt");
 
     for(std::string u : allusers){
+      if(u=="")continue;
       list_reply->add_all_users(u);
     }
 
     std::vector<std::string> followers = getFileContent(user.username + "_followers.txt");
     for(std::string f : followers){
+      if(f=="")continue;
       list_reply->add_followers(f);
     }
 
@@ -434,6 +436,8 @@ class SNSServiceImpl final : public SNSService::Service {
         std::this_thread::sleep_for(std::chrono::seconds(3));
       }
     },c);
+
+    write.detach();
 
     while(stream->Read(&message)){
       // read message and add it to the out.txt file
