@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <stdlib.h>
+#include <thread>
 #include <unistd.h>
 #include <google/protobuf/util/time_util.h>
 #include <grpc++/grpc++.h>
@@ -203,8 +204,29 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         return Status::OK;
     }
 
-    Status ServerCommunicate(ServerContext* context, const HeartBeat* hb, Reply* reply) override{
+    Status ServerCommunicate(ServerContext* context, ServerReaderWriter<HeartBeat, HeartBeat>* stream) override{
         // send only one message form the server and get the reply
+        HeartBeat hb;
+        time_t updt = time(NULL);
+        while(stream->Read(&hb)){
+            google::protobuf::Timestamp temptime = hb.timestamp();
+            time_t currtime = google::protobuf::util::TimeUtil::TimestampToTimeT(temptime);
+            double diff = difftime(currtime, updt);
+            if(diff > 20.0) break;
+            updt = currtime;
+        }
+        switch(hb.s_type()){
+            case ServerType::MASTER:
+                cout << "Master Server " << hb.sid() << " failed\n";
+                break;
+            case ServerType::SLAVE:
+                cout << "Slave Server " << hb.sid() << " failed\n";
+                break;
+            default:
+                break;
+        }
+        // server disconnects then turn it off
+        cluster_db[hb.sid()].changeServerStatus(hb.s_type());
         return Status::OK;
     }
 };

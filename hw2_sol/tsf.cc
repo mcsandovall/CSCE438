@@ -188,7 +188,6 @@ int Synchronizer::contactSynchronizers(){
 void Synchronizer::createStub(const int &id, const string &login_info){
   if(!fstubs[id]){
     fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
-    std::cout << "Stub created on port: " << login_info << std::endl;
   }
 }
 

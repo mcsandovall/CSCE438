@@ -81,7 +81,7 @@ using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
 
-HeartBeat createHeartBeat(const ServerType &t, const int &id){
+HeartBeat createHeartBeat(const ServerType t, const int id){
   // this function creates a heartbeat for the server
   HeartBeat hb;
   hb.set_sid(id);
@@ -284,8 +284,14 @@ void CServer::createServerStub(const std::string &login_info){
 void CServer::ContactCoordinator(){
   // send a constant communication with the coordinator
   ClientContext context;
-  HeartBeat hb;
-  
+  std::shared_ptr<ClientReaderWriter<HeartBeat, HeartBeat>> stream(cstub->ServerCommunicate(&context));
+
+  while(true){
+    HeartBeat hb = createHeartBeat(type, id);
+    stream->Write(hb);
+    sleep(10); // 10s for the stuff
+  }
+  stream->WritesDone();
 }
 
 CServer* mys;
@@ -554,6 +560,9 @@ std::string get_directory(){
   return ret;
 }
 
+void runCoord(CServer* serv){
+  serv->ContactCoordinator();
+}
 
 int main(int argc, char** argv) {
   
@@ -589,7 +598,8 @@ int main(int argc, char** argv) {
   mys = new CServer(host+":"+port, std::stoi(id), t);
   mys->Login(cip, cp);
   mys->RequestServers();
-  //mys->ContactCoordinator();
+  std::thread cord(runCoord, mys);
+  cord.detach();
 
   std::string dir = t + "_" + id;
 
