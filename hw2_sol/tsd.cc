@@ -390,11 +390,8 @@ class SNSServiceImpl final : public SNSService::Service {
       c.username = username;
       client_db.push_back(c);
       createFiles(username);
-      // add the user to all_users.txt
-      std::ofstream ofs("all_users.txt", std::ios_base::app);
-      ofs << username + "\n";
-      ofs.close();
-      ofs.open(username+"_followers.txt");
+      // add make the user follow itself
+      std::ofstream ofs("_followers.txt");
       ofs << username + "\n";
       ofs.close();
       reply->set_msg("Login Successful!");

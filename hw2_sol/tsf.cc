@@ -418,32 +418,39 @@ void updateAllUsers(Synchronizer* sync){
   File * f = findFile(filename);
   if(!f){
     // doesnt exist make a new one
-    vector<string> content = getFileContent(filename);
+    vector<string> content = makeUnique(getDirectoryFiles(MASTER_DIR, true));
     string tm = get_updateTime(filename);
     f = new File(filename, tm);
     f->content = content;
     file_db.push_back(f);
 
+    
     // send the content to the other synchronizers
+    std::ofstream ofs(filename, std::ios_base::app);
     for(string u : content){
       if(u=="")continue;
+      ofs << u +"\n";
       sync->sendNewUser(std::stoi(u));
     }
+    ofs.close();
     return;
   }
 
   // else the file exist then get the differnce from the current file and the on db
-  vector<string> content = getFileContent(filename);
+  vector<string> content = makeUnique(getDirectoryFiles(MASTER_DIR, true));
   content = getDiffernce(f->content, content);
   // update the current file and send the differnce to other syncs
+  std::ofstream ofs(filename, std::ios_base::app);
   for(string u : content){
     if(u=="")continue;
     std::cout << u << std::endl;
     if(contentExist(u,f->content) == -1){
       f->content.push_back(u);
+      ofs << u + "\n";
       sync->sendNewUser(std::stoi(u));
     }
   }
+  ofs.close();
 }
 
 void updateFollowingFiles(const vector<string> &fnames, Synchronizer * sync){
