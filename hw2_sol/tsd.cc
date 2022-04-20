@@ -286,19 +286,6 @@ void CServer::ContactCoordinator(){
   ClientContext context;
   HeartBeat hb;
   
-  // create a detached thread that send the coordinator a message every 10s
-  std::shared_ptr<ClientWriter<HeartBeat>> stream(cstub->ServerCommunicate(&context, &hb));
-  std::thread writer([stream](const ServerType t,const int id){
-    while(true){
-      // send message to the coordinator every 10s
-      HeartBeat h = createHeartBeat(t, id);
-      stream->Write(h);
-      sleep(10);
-    }
-    stream->WritesDone();
-  }, type, id);
-
-  writer.detach();
 }
 
 CServer* mys;
@@ -402,7 +389,10 @@ class SNSServiceImpl final : public SNSService::Service {
       client_db.push_back(c);
       createFiles(username);
       // add the user to all_users.txt
-      std::ofstream ofs("all_users.txt");
+      std::ofstream ofs("all_users.txt", std::ios_base::app);
+      ofs << username + "\n";
+      ofs.close();
+      ofs.open(username+"_followers.txt");
       ofs << username + "\n";
       ofs.close();
       reply->set_msg("Login Successful!");
@@ -441,6 +431,7 @@ class SNSServiceImpl final : public SNSService::Service {
         for(int i = 0; i < posts.size() && i < 20; ++i){
           stream->Write(posts[i]);
         }
+        std::this_thread::sleep_for(std::chrono::seconds(3));
       }
     },c);
 
@@ -616,6 +607,8 @@ int main(int argc, char** argv) {
 
   // make the all users txt
   std::ofstream ofs("all_users.txt");
+  ofs.close();
+  ofs.open("out.txt");
   ofs.close();
   
   // start the server communication

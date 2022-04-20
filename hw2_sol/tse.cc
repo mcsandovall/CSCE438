@@ -201,30 +201,8 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         return Status::OK;
     }
 
-    Status ServerCommunicate(ServerContext* context, ServerReader<HeartBeat>* stream, HeartBeat* heartb) override{
-        // create a thread each time there is a server connected to check their status
-        HeartBeat hb;
-        int sid = 0;
-        ServerType s_type;
-        time_t lastUpdate, currentUpdate;
-        //implement a timing system for communication 10s
-        while(stream->Read(&hb)){
-            if(!sid){ // only make the message once
-                // get the current sid
-                sid = hb.sid();
-                s_type = hb.s_type();
-                lastUpdate = google::protobuf::util::TimeUtil::TimestampToTimeT(hb.timestamp());
-            }
-            // get the time from the heartbeat
-            currentUpdate = google::protobuf::util::TimeUtil::TimestampToTimeT(hb.timestamp());
-            double difference = difftime(lastUpdate,currentUpdate);
-            if(difference > 20){
-                // end the connection
-                break;
-            }
-        }
-        // if server disconnects then deactive it
-        cluster_db[sid].changeServerStatus(s_type);
+    Status ServerCommunicate(ServerContext* context, const HeartBeat* hb, Reply* reply) override{
+        // send only one message form the server and get the reply
         return Status::OK;
     }
 };

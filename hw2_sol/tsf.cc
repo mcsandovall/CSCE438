@@ -187,6 +187,69 @@ void Synchronizer::createStub(const int &id, const string &login_info){
   if(!fstubs[id]) fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
 }
 
+void Synchronizer::sendNewUser(const int &id){
+  // sends the new user to the synchronizers
+  ClientContext context;
+  Request request;
+  request.set_follower(id);
+  Reply reply;
+  int sid = id + 1;
+  if(sid > 3) sid = 1;
+  if(fstubs[sid]){
+    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
+    }
+  }
+
+  sid = id -1;
+  if(sid < 1) sid = 3;
+  if(fstubs[sid]){
+    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
+    }
+  }
+}
+
+void Synchronizer::sendFollowRequest(const int &from, const int &to){
+  // send the follow request to the right cluster
+  int sid = (to % 3) + 1;
+  if(fstubs[sid]){
+    ClientContext context;
+    Request request;
+    request.set_follower(from);
+    request.set_followed(to);
+    Reply reply;
+    Status stat = fstubs[sid]->Follow(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error: sending follow request to syncher " << sid << std::endl;
+    }
+    std::cout << reply.msg() << std::endl;
+  }
+}
+
+void Synchronizer::sendTimelineMsg(const int &ids, const string &post){
+  int sid = (ids % 3) + 1;
+  if(sid == id){
+    std::ofstream ofs(MASTER_DIR + std::to_string(ids) + "_timeline.txt", std::ios_base::app);
+    ofs << post;
+    ofs.close();
+  }else{
+    if(fstubs[sid]){
+      ClientContext context;
+      TimelineMsg msg;
+      msg.set_id(ids);
+      msg.set_post(post);
+      Reply reply;
+      Status stat = fstubs[sid]->Timeline(&context, msg, &reply);
+      if(!stat.ok()){
+        std::cerr << "Error: sending timeline post to syncher " << sid << std::endl;
+      }
+    }
+  }
+}
+
 vector<string> getDirectoryFiles(const string &dire, bool names = false){
   vector<string> content;
   DIR *dir;
@@ -202,6 +265,7 @@ vector<string> getDirectoryFiles(const string &dire, bool names = false){
           if(names){
             int index = file.find('_');
             file = file.substr(0,index);
+            if(file == "all" || file == "out") continue;
           }
           content.push_back(file);
         }
@@ -233,6 +297,45 @@ vector<string> makeUnique(const vector<string> &vec){
     }
   }
   return unique;
+}
+
+vector<string> getDiffernce(const vector<string> &oldv, const vector<string> &newv){
+  vector<string> difference;
+  for(string d : newv){
+    if(contentExist(d,oldv) < 0){
+      difference.push_back(d);
+    }
+  }
+  return difference;
+}
+
+vector<string> getFileContent(const string &filename){
+  vector<string> content;
+  std::ifstream ifs(filename);
+  if(!ifs.is_open()){
+    std::cerr << "Error opening file " + filename + "\n";
+    return content;
+  }
+  string msg;
+  while(!ifs.eof()){
+    std::getline(ifs, msg);
+    content.push_back(msg);
+  }
+  return content;
+}
+
+string get_updateTime(const std::string &filename){
+  struct stat sb;
+  if(stat(filename.c_str(), &sb) == -1){
+    std::cerr << "Error getting stat\n";
+    return "";
+  }
+
+  std::stringstream ss(ctime(&sb.st_ctime));
+  int i = 0; 
+  std::string s;
+  while(ss >> s && i++ != 3){}
+  return s;
 }
 
 class SNSFSynchImp final : public  SNSFSynch::Service {
@@ -292,6 +395,119 @@ string get_directory(){
   return ret;
 }
 
+File * findFile(const string &filename){
+  for(File* f : file_db){
+    if(f->uname == filename){
+      return f;
+    }
+  }
+  return nullptr;
+}
+
+void updateAllUsers(Synchronizer* sync){
+  // find the file and compare
+  std::cout << "Updating all_users....\n";
+  string filename = MASTER_DIR + "all_users.txt";
+  File * f = findFile(filename);
+  if(!f){
+    // doesnt exist make a new one
+    vector<string> content = getFileContent(filename);
+    string tm = get_updateTime(filename);
+    f = new File(filename, tm);
+    f->content = content;
+    file_db.push_back(f);
+
+    // send the content to the other synchronizers
+    for(string u : content){
+      if(u=="")continue;
+      sync->sendNewUser(std::stoi(u));
+    }
+    return;
+  }
+  // else the file exist then get the differnce from the current file and the on db
+  vector<string> content = getFileContent(filename);
+  content = getDiffernce(f->content, content);
+  // update the current file and send the differnce to other syncs
+  f->content = content;
+  for(string u : content){
+    if(u=="")continue;
+    sync->sendNewUser(std::stoi(u));
+  }
+}
+
+void updateFollowingFiles(const vector<string> &fnames, Synchronizer * sync){
+  std::cout << "Updating following files....\n";
+  // check if the file else make a new file
+  for(string uname : fnames){
+    if(uname=="")continue;
+    string filename = MASTER_DIR + uname + "_following.txt";
+    File * f = findFile(filename);
+    if(!f){ // make a new file
+      vector<string> following = getFileContent(filename);
+      string tm = get_updateTime(filename);
+      f = new File(filename, tm);
+      f->content = following;
+      file_db.push_back(f);
+      for(string f : following){
+        if(f=="")continue;
+        sync->sendFollowRequest(std::stoi(uname), std::stoi(f));
+      }
+    }else{
+      // compare the content of the file
+      vector<string> content = getFileContent(filename);
+      content = getDiffernce(f->content, content);
+      for(string f : content){
+        if(f=="")continue;
+        sync->sendFollowRequest(std::stoi(uname), std::stoi(f));
+      }
+    }
+  }
+}
+
+string getUsernameFromPost(const string & post){
+  int i =0;
+  while(post[i++] != ';'){}
+  string username(post.substr(i,1));
+  return username;
+}
+
+void updateTimeline(const vector<string> unames, Synchronizer* sync){
+  std::cout << "Updating Timeline...\n";
+  // get the content from out.txt
+  vector<string> content = getFileContent(MASTER_DIR +"out.txt");
+  for(string post : content){
+    if(post=="")continue;
+    string u = getUsernameFromPost(post);
+    // get the followers file and send it to all of them
+    vector<string> followers = getFileContent(MASTER_DIR +u + "_followers.txt");
+    for(string f : followers){
+      if(f=="")continue;
+      sync->sendTimelineMsg(std::stoi(f), post);
+    }
+  }
+}
+
+void fsynchWorker(Synchronizer * fsync){
+  // here run a detached thread that checks the file manipulation
+  while(fsync){ // while the program is going
+    std::cout << "Cycle running\n";
+    // get all the files in the direcotry
+    vector<string> fnames = getDirectoryFiles(MASTER_DIR, true);
+
+    // get the info from the all users and get the unique values
+    updateAllUsers(fsync);
+
+    // get the update from the following txt files and follow the people
+    updateFollowingFiles(fnames, fsync);
+
+    // update the timeline if any
+    updateTimeline(fnames, fsync);
+
+    //sleep
+    sleep(3);
+  }
+}
+
 int main(int argc, char** argv){
     string host = "0.0.0.0",cip ="0.0.0.0", cp="3010", port="3050", id="1";
 
@@ -331,6 +547,8 @@ int main(int argc, char** argv){
   // // std thread synchworker().detach()
   // std::thread worker(fsynchworker, myf);
   // worker.detach();
+  std::thread worker(fsynchWorker, myf);
+  worker.detach();
 
   // run the server
   RunServer(host + ":" + port);
