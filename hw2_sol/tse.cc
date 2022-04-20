@@ -60,9 +60,11 @@ public:
         case ServerType::SLAVE:
             if(slave_port != ""){return 0;}
             slave_port = port;
+            break;
         case ServerType::SYNCHRONIZER:
             if(synchronizer_port != ""){return 0;}
             synchronizer_port = port;
+            break;
         default:
             break;
         }
@@ -124,7 +126,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     reply->set_msg("demoted");
                 }
             }
-            std::cout << "Master" << sid << " connected on port: " + port << std::endl;
+            std::cout << "Master" << sid << " connected on port: " + cluster_db[sid].getMaster() << std::endl;
             break;
         case ServerType::SLAVE:
             // check if slave port is already used
@@ -138,7 +140,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
             if(!cluster_db[sid].assignPort(port, type)){
                 reply->set_msg("full");
             }
-            std::cout << "Synchronizer" << sid << " connected on port: " << port << std::endl;
+            std::cout << "Synchronizer" << sid << " connected on port: " << cluster_db[sid].getSynchronizer() << std::endl;
             break;
         default:
             break;
@@ -178,14 +180,14 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     synch = sid + 1;
                     if(synch > 3) synch = 1;
                     server = cluster_db[synch].getSynchronizer();
-                    if(server != "") message = message = std::to_string(synch) + "=" + server;
+                    if(server != "") message = server;
 
                     message += "-";
 
                     synch = sid - 1;
                     if(synch == 0) synch = 3;
                     server = cluster_db[synch].getSynchronizer();
-                    if(server != "") message += message = std::to_string(synch) + "=" + server;
+                    if(server != "") message += server;
 
                     reply->set_msg(message);
                     break;
