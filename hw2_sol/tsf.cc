@@ -130,7 +130,6 @@ int Synchronizer::createSynchronizers(){
   request.set_id(id);
   request.set_server_type(ServerType::SYNCHRONIZER);
   snsCoordinator::Reply reply;
-
   Status stat = cstub->ServerRequest(&context, request, &reply);
   if(!stat.ok()){
     std::cerr << "Error: Getting Synchronizers\n";
@@ -142,10 +141,10 @@ int Synchronizer::createSynchronizers(){
   string login_info = reply.msg().substr(0,index);
   if(login_info != ""){
     ++count;
-    std::cout << login_info << std::endl;
     int sid = id + 1;
     if(sid > 3) sid = 1;
     fstubs[sid] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+    std::cout << "Stub Created on port: " << login_info << std::endl;
   }
   login_info = reply.msg().substr(index+1,reply.msg().size());
   if(login_info != ""){
@@ -153,13 +152,13 @@ int Synchronizer::createSynchronizers(){
     int sid = id - 1;
     if(sid == 0) sid = 3;
     fstubs[sid] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+    std::cout << "Stub Created on port: " << login_info << std::endl;
   }
   return count;
 }
 
 int Synchronizer::contactSynchronizers(){
   // send a contact for other synchronizers
-  ClientContext context;
   Message message;
   message.set_id(id);
   message.set_server_info(server_info);
@@ -167,14 +166,17 @@ int Synchronizer::contactSynchronizers(){
   int sid = id + 1;
   if(sid > 3) sid = 1;
   if(fstubs[sid]){
+    ClientContext context;
     Status stat = fstubs[sid]->Contact(&context, message, &reply);
     if(!stat.ok()){
       std::cerr << "Error: Communicating with synchronizer\n";
     }
   }
+
   sid = id -1;
   if(sid < 1) sid = 3;
   if(fstubs[sid]){
+    ClientContext context;
     Status stat = fstubs[sid]->Contact(&context, message, &reply);
     if(!stat.ok()){
       std::cerr << "Error: Communicating with synchronizer\n";
@@ -184,7 +186,10 @@ int Synchronizer::contactSynchronizers(){
 }
 
 void Synchronizer::createStub(const int &id, const string &login_info){
-  if(!fstubs[id]) fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+  if(!fstubs[id]){
+    fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+    std::cout << "Stub created on port: " << login_info << std::endl;
+  }
 }
 
 void Synchronizer::sendNewUser(const int &id){
@@ -562,7 +567,7 @@ int main(int argc, char** argv){
   // contact the other coordinators
   int count;
   if((count = myf->createSynchronizers()) < 0){
-    std::cerr << "Error: Reacher other synchronizers\n";
+    std::cerr << "Error: Reacheing other synchronizers\n";
   }
   std::cout << "Synchronizers reached: " << count << std::endl;
 
