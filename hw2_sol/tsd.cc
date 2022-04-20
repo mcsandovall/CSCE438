@@ -285,11 +285,11 @@ void CServer::ContactCoordinator(){
   // send a constant communication with the coordinator
   ClientContext context;
   std::shared_ptr<ClientReaderWriter<HeartBeat, HeartBeat>> stream(cstub->ServerCommunicate(&context));
-
+  
   while(true){
     HeartBeat hb = createHeartBeat(type, id);
     stream->Write(hb);
-    sleep(10); // 10s for the stuff
+    sleep(10);
   }
   stream->WritesDone();
 }
@@ -397,7 +397,7 @@ class SNSServiceImpl final : public SNSService::Service {
       client_db.push_back(c);
       createFiles(username);
       // add make the user follow itself
-      std::ofstream ofs("_followers.txt");
+      std::ofstream ofs(username +"_followers.txt");
       ofs << username + "\n";
       ofs.close();
       reply->set_msg("Login Successful!");
