@@ -11,7 +11,8 @@ service SNSFSynch{
     // timeline modifier
     rpc Timeline (TimelineMsg) returns (Reply) {}
     // add user to all user list
-    rpc NewUser (Request) returns (Reply) {}
+    rpc NotifyFailure (Message) returns (Reply) {}
+    // get the all user list from synchronizer
     rpc AllUsers (Request) returns (userReply) {}
 }   
 

@@ -21,6 +21,8 @@
 #include <map>
 
 #include "snc.grpc.pb.h"
+#include "sns.grpc.pb.h"
+#include "snf.grpc.pb.h"
 
 using std::string;
 using std::cout;
@@ -28,6 +30,12 @@ using std::endl;
 
 using google::protobuf::Timestamp;
 using google::protobuf::Duration;
+
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::ClientReaderWriter;
+using grpc::ClientWriter;
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
@@ -42,10 +50,15 @@ using snsCoordinator::ServerType;
 using snsCoordinator::RequesterType;
 using snsCoordinator::SNSCoordinator;
 
+using csce438::SNSService;
+using snsFSynch::SNSFSynch;
+
 class Cluster{
 private:
 int cid; // cluster id
 string master_port, slave_port, synchronizer_port;
+std::unique_ptr<SNSService::Stub> master_stub, slave_stub;
+std::unique_ptr<SNSFSynch::Stub> sync_stub;
 public:
     Cluster() : cid(0), master_port(""), slave_port(""), synchronizer_port(""){}
     Cluster(const int &id) : cid(id), master_port(""), slave_port(""), synchronizer_port(""){}
@@ -86,7 +99,66 @@ public:
     string getSynchronizer(){
         return ((synchronizer_port == "") ? "" : synchronizer_port);
     }
-
+    void createStub(ServerType &t, const std::string &login_info){
+        switch (t)
+        {
+        case ServerType::MASTER:
+            if(master_stub) return;
+            master_stub = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+            break;
+        case ServerType::SLAVE:
+            if(slave_stub) return;
+            slave_stub = std::unique_ptr<SNSService::Stub>(SNSService::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+            break;
+        case ServerType::SYNCHRONIZER:
+            if(sync_stub)return;
+            sync_stub = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
+            break;
+        default:
+            break;
+        }
+    }
+    void notifyServers(ServerType type){
+        switch (type)
+        {
+        case ServerType::MASTER:
+            if(slave_stub){
+                ClientContext context;
+                csce438::Request request;
+                request.set_username("master");
+                csce438::Reply reply;
+                Status stat = slave_stub->NotifyFailure(&context, request, &reply);
+            }
+            if(sync_stub){
+                ClientContext context;
+                snsFSynch::Message message;
+                message.set_id(cid);
+                message.set_server_info("master");
+                snsFSynch::Reply reply;
+                Status stat = sync_stub->NotifyFailure(&context, message, &reply);
+            }
+            break;
+        case ServerType::SLAVE:
+            if(master_stub){
+                ClientContext context;
+                csce438::Request request;
+                request.set_username("slave");
+                csce438::Reply reply;
+                Status stat = master_stub->NotifyFailure(&context, request, &reply);
+            }
+            if(sync_stub){
+                ClientContext context;
+                snsFSynch::Message message;
+                message.set_id(cid);
+                message.set_server_info("slave");
+                snsFSynch::Reply reply;
+                Status stat = sync_stub->NotifyFailure(&context, message, &reply);
+            }
+            break;
+        default:
+            break;
+        }
+    }
     void changeServerStatus(ServerType t){
         // change the status of the server
         if(t == ServerType::MASTER){
@@ -101,7 +173,7 @@ public:
 };
 
 // vector that contains the clusters depending on the id
-std::map<int, Cluster> cluster_db;
+std::map<int, Cluster*> cluster_db;
 
 class SNSCoordinatorImp final : public SNSCoordinator::Service{
     Status Login(ServerContext* context, const Request* request, Reply* reply) override{
@@ -117,9 +189,9 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
         {
         case ServerType::MASTER:
             // check if master port is assgined
-            if(!cluster_db[sid].assignPort(port, type)){
+            if(!cluster_db[sid]->assignPort(port, type)){
                 // if assgined check slave port
-                if(!cluster_db[sid].assignPort(port, ServerType::SLAVE)){
+                if(!cluster_db[sid]->assignPort(port, ServerType::SLAVE)){
                     // return the cluster is full
                     reply->set_msg("full");
                 }else{
@@ -127,21 +199,24 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     reply->set_msg("demoted");
                 }
             }
-            std::cout << "Master" << sid << " connected on port: " + cluster_db[sid].getMaster() << std::endl;
+            cluster_db[sid]->createStub(type, port);
+            std::cout << "Master" << sid << " connected on port: " + cluster_db[sid]->getMaster() << std::endl;
             break;
         case ServerType::SLAVE:
             // check if slave port is already used
-            if(!cluster_db[sid].assignPort(port, type)){
+            if(!cluster_db[sid]->assignPort(port, type)){
                 // then return the port is already used
                 reply->set_msg("full");
             }
+            cluster_db[sid]->createStub(type, port);
             std::cout << "Slave" << sid << " connected on port: " << port << std::endl;
             break;
         case ServerType::SYNCHRONIZER:
-            if(!cluster_db[sid].assignPort(port, type)){
+            if(!cluster_db[sid]->assignPort(port, type)){
                 reply->set_msg("full");
             }
-            std::cout << "Synchronizer" << sid << " connected on port: " << cluster_db[sid].getSynchronizer() << std::endl;
+            cluster_db[sid]->createStub(type, port);
+            std::cout << "Synchronizer" << sid << " connected on port: " << cluster_db[sid]->getSynchronizer() << std::endl;
             break;
         default:
             break;
@@ -160,7 +235,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
             switch (t)
             {
                 case ServerType::MASTER:
-                    server = cluster_db[sid].getSlave();
+                    server = cluster_db[sid]->getSlave();
                     
                     if(server == "") message ="NULL";
                     else message = server;
@@ -169,7 +244,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     break;
                 case ServerType::SLAVE:
                     // get the master and the synchronizer
-                    server = cluster_db[sid].getMaster();
+                    server = cluster_db[sid]->getMaster();
                     if(server == "") message = "NULL";
                     else message = server;
 
@@ -180,14 +255,14 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                     int synch;
                     synch = sid + 1;
                     if(synch > 3) synch = 1;
-                    server = cluster_db[synch].getSynchronizer();
+                    server = cluster_db[synch]->getSynchronizer();
                     if(server != "") message = server;
 
                     message += "-";
 
                     synch = sid - 1;
                     if(synch == 0) synch = 3;
-                    server = cluster_db[synch].getSynchronizer();
+                    server = cluster_db[synch]->getSynchronizer();
                     if(server != "") message += server;
 
                     reply->set_msg(message);
@@ -199,7 +274,7 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
             // check the id and return the master/ slave for that cluster
             int cid = request->id();
             cid = (cid % 3) + 1;
-            reply->set_msg(cluster_db[cid].getServer());
+            reply->set_msg(cluster_db[cid]->getServer());
         }
         return Status::OK;
     }
@@ -226,7 +301,8 @@ class SNSCoordinatorImp final : public SNSCoordinator::Service{
                 break;
         }
         // server disconnects then turn it off
-        cluster_db[hb.sid()].changeServerStatus(hb.s_type());
+        cluster_db[hb.sid()]->changeServerStatus(hb.s_type());
+        cluster_db[hb.sid()]->notifyServers(hb.s_type());
         return Status::OK;
     }
 };
@@ -246,7 +322,7 @@ void RunServer(std::string port_no){
 
 int main(int argc, char** argv){
     for(int i = 1; i < 4;++i){
-        cluster_db[i] = Cluster(i);
+        cluster_db[i] = new Cluster(i);
     }
 
     std::string port = "3010";

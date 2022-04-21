@@ -45,6 +45,8 @@ service SNSService{
   rpc Communicate (Request) returns (Reply) {}
   // having the slave mirror the timeline request
   rpc CopyTimeline (Request) returns (Reply) {}
+  // failure notification
+  rpc NotifyFailure (Request) returns (Reply) {}
 }
 
 message ListReply {

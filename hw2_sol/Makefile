@@ -24,7 +24,7 @@ tsc: sns.pb.o sns.grpc.pb.o snc.pb.o snc.grpc.pb.o tsc.o
 tsd: sns.pb.o sns.grpc.pb.o snc.pb.o snc.grpc.pb.o tsd.o
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
-tse: snc.pb.o snc.grpc.pb.o tse.o
+tse: snc.pb.o snc.grpc.pb.o snf.pb.o snf.grpc.pb.o sns.pb.o sns.grpc.pb.o tse.o
 	$(CXX) $^ $(LDFLAGS) -g -o $@
 
 tsf: snc.pb.o snc.grpc.pb.o snf.pb.o snf.grpc.pb.o tsf.o

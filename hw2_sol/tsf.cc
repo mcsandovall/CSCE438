@@ -80,6 +80,13 @@ struct File{
   }
 };
 
+string get_directory(){
+  char buff[256];
+  getcwd(buff, 256);
+  string ret(buff);
+  return ret;
+}
+
 // implentation for the follower synchronizer
 
 class Synchronizer{
@@ -89,7 +96,6 @@ public:
     int createSynchronizers();
     int contactSynchronizers();
     void createStub(const int &id, const string &login_info);
-    void sendNewUser(const int &id);
     void sendFollowRequest(const int &from, const int &to);
     void sendTimelineMsg(const int &id, const string &msg);
     void requestAllUsers();
@@ -214,33 +220,6 @@ int Synchronizer::contactSynchronizers(){
 void Synchronizer::createStub(const int &id, const string &login_info){
   if(!fstubs[id]){
     fstubs[id] = std::unique_ptr<SNSFSynch::Stub>(SNSFSynch::NewStub(grpc::CreateChannel(login_info, grpc::InsecureChannelCredentials())));
-  }
-}
-
-void Synchronizer::sendNewUser(const int &id){
-  // sends the new user to the synchronizers
-  ClientContext context;
-  Request request;
-  request.set_follower(id);
-  Reply reply;
-  int sid = id + 1;
-  if(sid > 3) sid = 1;
-  if(fstubs[sid]){
-    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
-    if(!stat.ok()){
-      std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
-    }
-    std::cout << reply.msg() << std::endl;
-  }
-
-  sid = id -1;
-  if(sid < 1) sid = 3;
-  if(fstubs[sid]){
-    Status stat = fstubs[sid]->NewUser(&context, request, &reply);
-    if(!stat.ok()){
-      std::cerr << "Error sending new user to synchronizer " << sid << std::endl;
-    }
-    std::cout << reply.msg() << std::endl;
   }
 }
 
@@ -381,7 +360,6 @@ vector<string> getDiffernce(const vector<string> &oldv, const vector<string> &ne
   return difference;
 }
 
-
 string get_updateTime(const std::string &filename){
   struct stat sb;
   if(stat(filename.c_str(), &sb) == -1){
@@ -428,13 +406,13 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     return Status::OK;
   }
 
-  Status NewUser(ServerContext* context, const Request* request, Reply* reply) override{
-    // add the user to all users txt
-    string user = std::to_string(request->follower());
-    std::ofstream ofs(MASTER_DIR+"all_users.txt", std::ios_base::app);
-    ofs << user + "\n";
-    ofs.close();
-    reply->set_msg("New User Successful");
+  Status NotifyFailure(ServerContext* context, const Message* request, Reply* reply) override{
+    // check which server failed and if master fails change the master_dir
+    if(request->server_info() == "master"){
+      // change the master dir to slave
+      MASTER_DIR = get_directory() + "/slave_" + std::to_string(request->id()) + "/";
+      std::cout << "Master server failed\n";
+    }
     return Status::OK;
   }
 
@@ -458,13 +436,6 @@ void RunServer(std::string server_address){
     std::cout << "Synchronizer listening on " << server_address << std::endl;
 
     server->Wait();
-}
-
-string get_directory(){
-  char buff[256];
-  getcwd(buff, 256);
-  string ret(buff);
-  return ret;
 }
 
 File * findFile(const string &filename){

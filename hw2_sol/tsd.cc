@@ -105,6 +105,13 @@ struct Client {
   }
 };
 
+std::string get_directory(){
+  char buff[256];
+  getcwd(buff, 256);
+  std::string ret(buff);
+  return ret;
+}
+
 enum RequestType{
   Login,
   Follow,
@@ -184,6 +191,11 @@ public:
   std::unique_ptr<SNSService::Stub> stub_;
   int getID(){return id;}
   void sendRequest(const Request *r, RequestType t);
+  void changeType(){
+    if(type == ServerType::MASTER) return;
+    type = ServerType::MASTER;
+    stub_.reset();
+  }
 private:
   std::string ip_port;
   int id;
@@ -541,6 +553,17 @@ class SNSServiceImpl final : public SNSService::Service {
     ofs.close();
     return Status::OK;
   }
+
+  Status NotifyFailure(ServerContext* context, const Request* request, Reply* reply){
+    // change to see if it is the master and delete the stub, change cwdir and change type to master
+    if(request->username() == "master"){
+      // master died
+      mys->changeType();
+      CW_DIR = get_directory() + "/slave_" + std::to_string(mys->getID()) + "/";
+      std::cout << "Master failed\n";
+    }
+    return Status::OK;
+  }
 };
 
 void RunServer(std::string port_no) {
@@ -554,13 +577,6 @@ void RunServer(std::string port_no) {
   std::cout << "Server listening on " << server_address << std::endl;
 
   server->Wait();
-}
-
-std::string get_directory(){
-  char buff[256];
-  getcwd(buff, 256);
-  std::string ret(buff);
-  return ret;
 }
 
 void runCoord(CServer* serv){
