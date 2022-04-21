@@ -11,7 +11,8 @@ service SNSFSynch{
     // timeline modifier
     rpc Timeline (TimelineMsg) returns (Reply) {}
     // add user to all user list
-    rpc NewUser (Request) returns (Reply) {} 
+    rpc NewUser (Request) returns (Reply) {}
+    rpc AllUsers (Request) returns (userReply) {}
 }   
 
 // initial commuincation
@@ -36,4 +37,8 @@ message Reply{
 message TimelineMsg{
     int32 id = 1;
     string post = 2;
+}
+
+message userReply{
+    repeated string users = 1;
 }

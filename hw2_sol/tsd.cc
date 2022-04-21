@@ -400,6 +400,9 @@ class SNSServiceImpl final : public SNSService::Service {
       std::ofstream ofs(username +"_followers.txt");
       ofs << username + "\n";
       ofs.close();
+      ofs.open("all_users.txt");
+      ofs << username + "\n";
+      ofs.close();
       reply->set_msg("Login Successful!");
     }
     else{ 

@@ -52,6 +52,7 @@ using snsCoordinator::SNSCoordinator;
 using snsFSynch::Request;
 using snsFSynch::Message;
 using snsFSynch::Reply;
+using snsFSynch::userReply;
 using snsFSynch::TimelineMsg;
 using snsFSynch::SNSFSynch;
 
@@ -91,6 +92,7 @@ public:
     void sendNewUser(const int &id);
     void sendFollowRequest(const int &from, const int &to);
     void sendTimelineMsg(const int &id, const string &msg);
+    void requestAllUsers();
 private:
     int id;
     std::string server_info;
@@ -102,6 +104,30 @@ Synchronizer * myf;
 string MASTER_DIR;
 vector<File* > file_db;
 vector<string> client_db;
+
+int contentExist(const string &content, const vector<string> &vec){
+  for(int i = 0; i < vec.size();++i){
+    if(vec[i] == content){
+      return i;
+    }
+  }
+  return -1;
+}
+
+vector<string> getFileContent(const string &filename){
+  vector<string> content;
+  std::ifstream ifs(filename);
+  if(!ifs.is_open()){
+    std::cerr << "Error opening file " + filename + "\n";
+    return content;
+  }
+  string msg;
+  while(!ifs.eof()){
+    std::getline(ifs, msg);
+    content.push_back(msg);
+  }
+  return content;
+}
 
 int Synchronizer::reachCoordinator(const string &cip, const string &cp){
   string login_info = cip +":"+cp;
@@ -256,6 +282,55 @@ void Synchronizer::sendTimelineMsg(const int &ids, const string &post){
   }
 }
 
+void Synchronizer::requestAllUsers(){
+  // request the files from all the users
+  int sid = id + 1;
+  if(sid > 3) sid = 1;
+  if(fstubs[sid]){
+    ClientContext context;
+    Request request;
+    userReply reply;
+    Status stat = fstubs[sid]->AllUsers(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error getting all the users from synchronizer: " << sid << std::endl;
+    }else{
+      // add the content from the reply to the file
+      vector<string> cusers = getFileContent(MASTER_DIR + "all_users.txt");
+      // get the difference
+      std::ofstream ofs(MASTER_DIR + "all_users.txt", std::ios_base::app);
+      for(string u : reply.users()){
+        if(contentExist(u,cusers) == -1){
+          ofs << u + "\n";
+        }
+      }
+      ofs.close();
+    }
+  }
+
+  sid = id -1;
+  if(sid < 1) sid = 3;
+  if(fstubs[sid]){
+    ClientContext context;
+    Request request;
+    userReply reply;
+    Status stat = fstubs[sid]->AllUsers(&context, request, &reply);
+    if(!stat.ok()){
+      std::cerr << "Error getting all users from synchronizer " << sid << std::endl;
+    }else{
+      // add the content from the reply to the file
+      vector<string> cusers = getFileContent(MASTER_DIR + "all_users.txt");
+      // get the difference
+      std::ofstream ofs(MASTER_DIR + "all_users.txt", std::ios_base::app);
+      for(string u : reply.users()){
+        if(contentExist(u,cusers) == -1){
+          ofs << u + "\n";
+        }
+      }
+      ofs.close();
+    }
+  }
+}
+
 vector<string> getDirectoryFiles(const string &dire, bool names = false){
   vector<string> content;
   DIR *dir;
@@ -286,15 +361,6 @@ vector<string> getDirectoryFiles(const string &dire, bool names = false){
   return content;
 }
 
-int contentExist(const string &content, const vector<string> &vec){
-  for(int i = 0; i < vec.size();++i){
-    if(vec[i] == content){
-      return i;
-    }
-  }
-  return -1;
-}
-
 vector<string> makeUnique(const vector<string> &vec){
   vector<string> unique;
   for(string e : vec){
@@ -315,20 +381,6 @@ vector<string> getDiffernce(const vector<string> &oldv, const vector<string> &ne
   return difference;
 }
 
-vector<string> getFileContent(const string &filename){
-  vector<string> content;
-  std::ifstream ifs(filename);
-  if(!ifs.is_open()){
-    std::cerr << "Error opening file " + filename + "\n";
-    return content;
-  }
-  string msg;
-  while(!ifs.eof()){
-    std::getline(ifs, msg);
-    content.push_back(msg);
-  }
-  return content;
-}
 
 string get_updateTime(const std::string &filename){
   struct stat sb;
@@ -385,6 +437,15 @@ class SNSFSynchImp final : public  SNSFSynch::Service {
     reply->set_msg("New User Successful");
     return Status::OK;
   }
+
+  Status AllUsers(ServerContext* context, const Request* request, userReply* reply){
+    // get the content from the all file list
+    vector<string> users = getFileContent(MASTER_DIR + "all_users.txt");
+    for(string u : users){
+      reply->add_users(u);
+    }
+    return Status::OK;
+  }
 };
 
 void RunServer(std::string server_address){
@@ -416,45 +477,8 @@ File * findFile(const string &filename){
 }
 
 void updateAllUsers(Synchronizer* sync){
-  // find the file and compare
-  //std::cout << "Updating all_users....\n";
-  string filename = MASTER_DIR + "all_users.txt";
-  File * f = findFile(filename);
-  if(!f){
-    // doesnt exist make a new one
-    vector<string> content = makeUnique(getDirectoryFiles(MASTER_DIR, true));
-    string tm = get_updateTime(filename);
-    f = new File(filename, tm);
-    f->content = content;
-    file_db.push_back(f);
-
-    
-    // send the content to the other synchronizers
-    std::ofstream ofs(filename, std::ios_base::app);
-    for(string u : content){
-      if(u=="")continue;
-      ofs << u +"\n";
-      sync->sendNewUser(std::stoi(u));
-    }
-    ofs.close();
-    return;
-  }
-
-  // else the file exist then get the differnce from the current file and the on db
-  vector<string> content = makeUnique(getDirectoryFiles(MASTER_DIR, true));
-  content = getDiffernce(f->content, content);
-  // update the current file and send the differnce to other syncs
-  std::ofstream ofs(filename, std::ios_base::app);
-  for(string u : content){
-    if(u=="")continue;
-    std::cout << u << std::endl;
-    if(contentExist(u,f->content) == -1){
-      f->content.push_back(u);
-      ofs << u + "\n";
-      sync->sendNewUser(std::stoi(u));
-    }
-  }
-  ofs.close();
+  // request the list of users from other servers
+  sync->requestAllUsers();
 }
 
 void updateFollowingFiles(const vector<string> &fnames, Synchronizer * sync){
